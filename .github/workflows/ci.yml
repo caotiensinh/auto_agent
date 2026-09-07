@@ -185,7 +185,7 @@ jobs:
           grep -q "https://__OPENCLAW_PUBLIC_HOST__/" scripts/control_center.py
           grep -q 'parts.append("Secure")' scripts/control_center.py
           ! grep -q 'Domain=.kumakenchi.jp' scripts/control_center.py
-          grep -Fq 'f"https://{public_host}"' scripts/unified_control.sh
+          grep -Fq 'f"https://{public_host}"' scripts/unified_control.sh || grep -Fq 'f"https://{public_host}"' scripts/unified_control.sh
 
       - name: OpenClaw single-login SSO contracts
         shell: bash

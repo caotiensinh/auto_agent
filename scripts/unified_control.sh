@@ -84,15 +84,18 @@ systemctl --user is-active --quiet auto-agent-hermes-dashboard.service \
   || systemctl --user start auto-agent-hermes-dashboard.service \
   || die "Hermes dashboard service not running"
 
-"$OPENCLAW" config unset gateway.auth.token >/dev/null 2>&1 || true
+# Build every trusted-proxy prerequisite before switching auth.mode. OpenClaw
+# validates the whole config on each `config set`, so setting the mode first can
+# fail while userHeader/allowLoopback/allowUsers are not present yet.
 "$OPENCLAW" config set gateway.mode local >/dev/null
 "$OPENCLAW" config set gateway.bind loopback >/dev/null
 "$OPENCLAW" config set gateway.trustedProxies '["127.0.0.1"]' --strict-json >/dev/null
-"$OPENCLAW" config set gateway.auth.mode trusted-proxy >/dev/null
-"$OPENCLAW" config set gateway.auth.password "$OPENCLAW_LOCAL_PASSWORD" >/dev/null
 "$OPENCLAW" config set gateway.auth.trustedProxy.userHeader x-forwarded-user >/dev/null
 "$OPENCLAW" config set gateway.auth.trustedProxy.allowLoopback true >/dev/null
 "$OPENCLAW" config set gateway.auth.trustedProxy.allowUsers '["auto-agent-admin"]' --strict-json >/dev/null
+"$OPENCLAW" config unset gateway.auth.token >/dev/null 2>&1 || true
+"$OPENCLAW" config set gateway.auth.password "$OPENCLAW_LOCAL_PASSWORD" >/dev/null
+"$OPENCLAW" config set gateway.auth.mode trusted-proxy >/dev/null
 "$OPENCLAW" config set gateway.controlUi.allowedOrigins "[\"http://${LAPTOP_IP}:${OPENCLAW_PORT}\"]" --strict-json >/dev/null
 "$OPENCLAW" config set gateway.http.endpoints.chatCompletions.enabled true >/dev/null
 "$OPENCLAW" gateway restart --safe >/dev/null 2>&1 || "$OPENCLAW" gateway restart >/dev/null 2>&1 || true

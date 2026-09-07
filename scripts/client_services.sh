@@ -3,6 +3,7 @@ set -Eeuo pipefail
 AUTO_AGENT_COMPONENT=client-services
 
 HERMES_DASHBOARD_PORT="${HERMES_DASHBOARD_PORT:-9119}"
+OPENCLAW_GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 LAN_CONTROL="${LAN_CONTROL:-0}"
 CONTROL_DIR="$HOME/.config/auto_agent"
 CONTROL_ENV="$CONTROL_DIR/control.env"
@@ -185,16 +186,22 @@ openclaw_field(){
   python3 - "$1" "$2" <<'PY'
 import json,sys
 try:
- d=json.loads(sys.argv[1]); svc=d.get('service') or {}; rpc=d.get('rpc') or {}; rt=svc.get('runtime') or {}
+ d=json.loads(sys.argv[1]); svc=d.get('service') or {}; rt=svc.get('runtime') or {}
  vals={
   'installed': bool(svc.get('command') is not None or svc.get('loaded')),
   'running': rt.get('status') == 'running',
-  'reachable': bool(rpc.get('ok')),
  }
- print('1' if vals[sys.argv[2]] else '0')
+ print('1' if vals.get(sys.argv[2], False) else '0')
 except Exception:
  print('0')
 PY
+}
+
+openclaw_startup_probe(){
+  curl -fsS --connect-timeout 2 --max-time 3 \
+    "http://127.0.0.1:${OPENCLAW_GATEWAY_PORT}/startupz" \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ok") is True and d.get("status")=="started"' \
+    >/dev/null 2>&1
 }
 
 configure_openclaw_access(){
@@ -212,7 +219,7 @@ configure_openclaw_access(){
 }
 
 ensure_openclaw_gateway(){
-  local st installed running reachable label enabled=0
+  local st installed running label enabled=0
   configure_openclaw_access
   st="$(openclaw_status_json)"
   installed="$(openclaw_field "$st" installed)"
@@ -235,17 +242,19 @@ PY
   st="$(openclaw_status_json)"; running="$(openclaw_field "$st" running)"
   if [[ "$running" != 1 ]]; then
     "$OPENCLAW" gateway start >/dev/null || die "OpenClaw gateway start failed"
-  else
-    "$OPENCLAW" gateway restart --safe >/dev/null 2>&1 || "$OPENCLAW" gateway restart >/dev/null 2>&1 || true
   fi
 
   for _ in $(seq 1 30); do
-    st="$(openclaw_status_json)"; reachable="$(openclaw_field "$st" reachable)"
-    [[ "$reachable" == 1 ]] && break
+    st="$(openclaw_status_json)"; running="$(openclaw_field "$st" running)"
+    if [[ "$running" == 1 ]] && openclaw_startup_probe; then
+      ok "OpenClaw gateway enabled + running + /startupz=started"
+      return 0
+    fi
     sleep 1
   done
-  [[ "${reachable:-0}" == 1 ]] || { "$OPENCLAW" gateway status || true; die "OpenClaw gateway is not reachable"; }
-  ok "OpenClaw gateway enabled + running + reachable"
+  "$OPENCLAW" gateway status || true
+  curl -sS --max-time 3 "http://127.0.0.1:${OPENCLAW_GATEWAY_PORT}/startupz" || true
+  die "OpenClaw gateway failed service/startup HTTP readiness"
 }
 
 install_management_cli(){
@@ -259,6 +268,7 @@ export PATH
 HERMES="$(command -v hermes || true)"
 OPENCLAW="$(command -v openclaw || true)"
 HPORT="${HERMES_DASHBOARD_PORT:-9119}"
+OPORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 
 case "${1:-status}" in
   status)
@@ -269,7 +279,8 @@ case "${1:-status}" in
     systemctl --user --no-pager status auto-agent-hermes-dashboard.service || true
     echo
     echo "=== OpenClaw Gateway ==="
-    "$OPENCLAW" gateway status || true
+    systemctl --user is-active openclaw-gateway.service 2>/dev/null || true
+    curl -fsS --max-time 3 "http://127.0.0.1:${OPORT}/startupz" 2>/dev/null || true
     echo
     echo "Hermes UI : http://127.0.0.1:${HPORT}"
     echo "OpenClaw  : run 'auto-agent openclaw-dashboard'"
@@ -301,9 +312,7 @@ case "${1:-status}" in
     shift; exec "$OPENCLAW" dashboard "$@"
     ;;
   logs)
-    journalctl --user -u hermes-gateway.service -u auto-agent-hermes-dashboard.service -n 200 --no-pager || true
-    echo
-    "$OPENCLAW" gateway status --deep 2>/dev/null || "$OPENCLAW" gateway status || true
+    journalctl --user -u hermes-gateway.service -u auto-agent-hermes-dashboard.service -u openclaw-gateway.service -n 250 --no-pager || true
     ;;
   credentials)
     f="$HOME/.config/auto_agent/control.env"
@@ -335,7 +344,7 @@ print(ipaddress.ip_interface(sys.argv[1]).network)
 PY
 )"
     sudo ufw allow from "$cidr" to any port "$HERMES_DASHBOARD_PORT" proto tcp >/dev/null
-    sudo ufw allow from "$cidr" to any port 18789 proto tcp >/dev/null
+    sudo ufw allow from "$cidr" to any port "$OPENCLAW_GATEWAY_PORT" proto tcp >/dev/null
     ok "UFW LAN-only control rules configured for $cidr"
   else
     warn "LAN_CONTROL=1 but UFW is inactive; app authentication is enabled, but no host firewall rule was added"
@@ -362,7 +371,7 @@ printf 'AUTO_AGENT BOOT + CONTROL READY\n'
 printf 'Boot persistence : loginctl linger=yes\n'
 printf 'Hermes Gateway   : enabled + running\n'
 printf 'Hermes Dashboard : http://127.0.0.1:%s\n' "$HERMES_DASHBOARD_PORT"
-printf 'OpenClaw Gateway : enabled + running + reachable\n'
+printf 'OpenClaw Gateway : enabled + running + /startupz=started\n'
 printf 'Control command  : auto-agent status\n'
 printf 'LAN control      : %s\n' "$([[ "$LAN_CONTROL" == 1 ]] && echo enabled-authenticated || echo disabled-loopback-only)"
 printf '============================================================\n'

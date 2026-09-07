@@ -32,12 +32,17 @@ command -v sudo >/dev/null || die "sudo required"
 [[ "$CENTER_API_TIMEOUT" =~ ^[0-9]+$ ]] || die "CONTROL_CENTER_API_TIMEOUT must be an integer"
 (( CENTER_API_TIMEOUT >= 60 && CENTER_API_TIMEOUT <= 3600 )) || die "CONTROL_CENTER_API_TIMEOUT must be between 60 and 3600 seconds"
 
-python3 - "$CENTER_PUBLIC_HOST" "$HERMES_PUBLIC_HOST" "$OPENCLAW_PUBLIC_HOST" <<'PY'
+python3 - "$PUBLIC_DOMAIN" "$CENTER_PUBLIC_HOST" "$HERMES_PUBLIC_HOST" "$OPENCLAW_PUBLIC_HOST" <<'PY'
 import re,sys
+public_domain = sys.argv[1].strip().lower().lstrip('.')
 pat = re.compile(r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$")
-for host in sys.argv[1:]:
+if not pat.fullmatch(public_domain):
+    raise SystemExit(f"invalid public domain: {public_domain!r}")
+for host in sys.argv[2:]:
     if not pat.fullmatch(host):
         raise SystemExit(f"invalid public hostname: {host!r}")
+    if not host.lower().endswith('.' + public_domain) and host.lower() != public_domain:
+        raise SystemExit(f"public hostname outside configured domain: {host!r}")
 PY
 
 PATH="$HOME/.local/bin:$HOME/.hermes/bin:$HOME/.hermes/node/bin:$HOME/.openclaw/bin:$PATH"
@@ -100,9 +105,9 @@ curl -fsSL --proto '=https' --tlsv1.2 -H 'Cache-Control: no-cache' -H 'Pragma: n
 python3 -m py_compile "$tmp" || die "control_center_v2.py syntax invalid"
 if ! cmp -s "$tmp" "$APP_FILE" 2>/dev/null; then
   install -m 700 "$tmp" "$APP_FILE"
-  ok "Control Center v2 installed/updated"
+  ok "Control Center auth logic installed/updated"
 else
-  ok "Control Center v2 already current; reuse"
+  ok "Control Center auth logic already current; reuse"
 fi
 rm -f "$tmp"
 
@@ -112,7 +117,7 @@ mkdir -p "$HOME/.config/systemd/user"
 unit_path="$HOME/.config/systemd/user/$UNIT"
 cat >"$unit_path" <<EOF2
 [Unit]
-Description=auto_agent Unified Control Center v0.5.8
+Description=auto_agent Unified Control Center v0.5.9
 After=network-online.target auto-agent-hermes-dashboard.service
 Wants=network-online.target
 
@@ -123,6 +128,7 @@ Environment=PATH=$PATH
 EnvironmentFile=$ENV_FILE
 Environment=AUTO_AGENT_CENTER_HOST=127.0.0.1
 Environment=AUTO_AGENT_CENTER_PORT=$CENTER_INTERNAL_PORT
+Environment=AUTO_AGENT_PUBLIC_DOMAIN=$PUBLIC_DOMAIN
 Environment=AUTO_AGENT_HERMES_PUBLIC_PORT=$HERMES_PUBLIC_PORT
 Environment=AUTO_AGENT_OPENCLAW_PUBLIC_PORT=$OPENCLAW_PUBLIC_PORT
 Environment=AUTO_AGENT_CENTER_PUBLIC_HOST=$CENTER_PUBLIC_HOST
@@ -132,7 +138,7 @@ Environment=AUTO_AGENT_HERMES_BIN=$HERMES
 Environment=AUTO_AGENT_OPENCLAW_BIN=$OPENCLAW
 Environment=AUTO_AGENT_OPENCLAW_URL=http://127.0.0.1:$OPENCLAW_BACKEND_PORT
 Environment=AUTO_AGENT_NATIVE_SESSION_TTL=900
-Environment=AUTO_AGENT_SSO_TTL=30
+Environment=AUTO_AGENT_SSO_TTL=180
 ExecStart=/usr/bin/python3 $APP_FILE
 Restart=always
 RestartSec=3
@@ -161,18 +167,26 @@ if [[ "$backend_ok" != 1 ]]; then
 fi
 ok "Control Center backend reachable on 127.0.0.1:${CENTER_INTERNAL_PORT}"
 
-# Public-native authentication uses a short-lived, signed, one-time handoff from
-# the already-authenticated Workspace session. Cloudflare Access remains the
-# outer gate, but no Cf-Access-* header is accepted as an Auto Agent login.
-# OpenClaw trusted-proxy requires a non-loopback attributed client. Public
-# routes overwrite X-Forwarded-For/Real-IP with Cloudflare Cf-Connecting-IP;
-# LAN routes overwrite them with the socket peer. Client forwarded headers are
-# never passed through.
+# v0.5.9 SSO design:
+# 1) the authenticated Workspace issues a signed, target-bound one-time token;
+# 2) the token is carried in a short-lived HttpOnly Secure cookie limited to
+#    Domain=.PUBLIC_DOMAIN and Path=/_auto_agent_sso;
+# 3) the browser follows a GET to the native host. If Cloudflare Access inserts
+#    an IdP/OTP redirect, the browser can still resume the same GET afterwards;
+# 4) the native callback consumes the one-time token, clears the bridge cookie,
+#    and creates a host-only native session. A single automatic retry handles a
+#    first-visit Access challenge without creating an authentication loop.
+# No Cf-Access-* header is accepted as an Auto Agent login boundary.
+#
+# OpenClaw trusted-proxy separately requires a non-loopback attributed client.
+# Public routes overwrite X-Forwarded-For/Real-IP with Cf-Connecting-IP; LAN
+# routes overwrite them with the socket peer. Client forwarded headers are never
+# passed through.
 NAV='<div id="auto-agent-nav" style="position:fixed;top:8px;right:8px;z-index:2147483647;background:#111827;color:#fff;padding:8px 10px;border-radius:9px;font:13px sans-serif;box-shadow:0 4px 18px #0008"><a style="color:#fff;text-decoration:none;margin-right:10px" href="$auto_agent_center_nav_url">Auto Agent</a><a style="color:#fff;text-decoration:none;margin-right:10px" href="$auto_agent_hermes_nav_url">Hermes</a><a style="color:#fff;text-decoration:none" href="$auto_agent_openclaw_nav_url">OpenClaw</a></div>'
 
 nginx_tmp="$(mktemp)"
 cat >"$nginx_tmp" <<EOF2
-# Managed by caotiensinh/auto_agent v0.5.8
+# Managed by caotiensinh/auto_agent v0.5.9
 map \$http_upgrade \$auto_agent_upgrade { default upgrade; '' close; }
 
 map \$http_cf_connecting_ip \$auto_agent_cf_client_ip {
@@ -275,6 +289,7 @@ server {
     deny all;
     proxy_pass http://127.0.0.1:${CENTER_INTERNAL_PORT}/_auto_agent_sso;
     proxy_http_version 1.1;
+    proxy_set_header Cookie \$http_cookie;
     proxy_set_header X-Auto-Agent-SSO-Boundary 1;
     proxy_set_header X-Auto-Agent-SSO-Target hermes;
     proxy_set_header X-Forwarded-Proto \$auto_agent_client_scheme;
@@ -329,6 +344,7 @@ server {
     deny all;
     proxy_pass http://127.0.0.1:${CENTER_INTERNAL_PORT}/_auto_agent_sso;
     proxy_http_version 1.1;
+    proxy_set_header Cookie \$http_cookie;
     proxy_set_header X-Auto-Agent-SSO-Boundary 1;
     proxy_set_header X-Auto-Agent-SSO-Target openclaw;
     proxy_set_header X-Forwarded-Proto \$auto_agent_client_scheme;
@@ -372,7 +388,7 @@ rm -f "$nginx_tmp"
 sudo nginx -t
 sudo systemctl enable --now nginx >/dev/null
 sudo systemctl reload nginx
-ok "Nginx signed-SSO boundary + safe forwarded-client attribution configured"
+ok "Nginx temporary-cookie SSO boundary + safe forwarded-client attribution configured"
 ok "Unified Chat API upstream timeout: ${CENTER_API_TIMEOUT}s"
 
 if command -v ufw >/dev/null 2>&1 && sudo ufw status 2>/dev/null | grep -q '^Status: active'; then
@@ -428,13 +444,14 @@ for host in "$CENTER_PUBLIC_HOST" "$HERMES_PUBLIC_HOST" "$OPENCLAW_PUBLIC_HOST";
 done
 
 printf '\n============================================================\n'
-printf 'AUTO_AGENT UNIFIED CONTROL CENTER v0.5.8 READY\n'
+printf 'AUTO_AGENT UNIFIED CONTROL CENTER v0.5.9\n'
 printf 'LAN URL         : http://%s:%s\n' "$LAPTOP_IP" "$CENTER_PORT"
 printf 'Public URL      : https://%s\n' "$CENTER_PUBLIC_HOST"
 printf 'Hermes public   : https://%s\n' "$HERMES_PUBLIC_HOST"
 printf 'OpenClaw public : https://%s\n' "$OPENCLAW_PUBLIC_HOST"
-printf 'Public auth     : Cloudflare Access + signed one-time Auto Agent SSO\n'
-printf 'Native session  : host-only Secure cookie, auto-renewed via Workspace SSO\n'
+printf 'Public auth     : Cloudflare Access + resilient Auto Agent SSO bridge\n'
+printf 'SSO bridge      : HttpOnly Secure, path-limited, one-time, 180s TTL\n'
+printf 'Native session  : host-only Secure cookie, 15m TTL with Workspace renewal\n'
 printf 'Login user      : admin\n'
 printf 'Password        : run "auto-agent credentials" on laptop\n'
 printf 'LAN ACL         : %s\n' "$LAN_CIDR"

@@ -45,6 +45,16 @@ jobs:
           grep -q 'MIN_AGENT_CONTEXT' scripts/server.sh
           grep -q 'UPDATE_OLLAMA' scripts/server.sh
 
+      - name: Client runtime reuse contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'prepare_client_runtime_path' install.sh
+          grep -q '\$HOME/.local/bin' install.sh
+          grep -q '\$HOME/.hermes/node/bin' install.sh
+          grep -q 'Node runtime: .*\[REUSE\]' install.sh
+          grep -q 'OpenClaw exists but no Node runtime was found' install.sh
+
       - name: Secure deployment and discovery contracts
         shell: bash
         run: |

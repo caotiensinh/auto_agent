@@ -2,11 +2,32 @@
 
 One-command, inventory-first deployment for a local AI control plane using Hermes + OpenClaw + a remote Ollama GPU server.
 
-Run the same command on the NVIDIA Ubuntu PC first, then on the Ubuntu laptop:
+## Canonical one-command install
+
+During active development, use the cache-busting form below so `raw.githubusercontent.com` cannot hand the machine an older bootstrap from CDN cache:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | bash
+curl -fsSL -H 'Cache-Control: no-cache' "https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh?$(date +%s)" | bash
 ```
+
+Run the same command on the NVIDIA Ubuntu PC first, then on the Ubuntu laptop.
+
+A correct current bootstrap prints:
+
+```text
+AUTO_AGENT BOOTSTRAP
+Version : 0.5.0
+```
+
+On a laptop it must then show all three phases:
+
+```text
+CLIENT PHASE 1/3 — agent + GPU connectivity reconciliation
+CLIENT PHASE 2/3 — boot persistence + loopback agent services
+CLIENT PHASE 3/3 — authenticated unified LAN Control Center
+```
+
+If a laptop log ends immediately after `AUTO_AGENT LAPTOP READY` and never shows phase 2/3, that run used an old cached bootstrap and did not install the Control Center.
 
 ## Core rule
 
@@ -57,9 +78,9 @@ The common menu is:
 Unified Chat | Hermes | OpenClaw | Status
 ```
 
-The native Hermes and OpenClaw pages keep a small common navigation menu injected by the authenticated reverse proxy, so users can switch back to Auto Agent, Hermes, or OpenClaw without typing another address.
+The native Hermes and OpenClaw pages keep a common navigation layer through the authenticated reverse proxy, so users can switch back to Auto Agent, Hermes, or OpenClaw without typing another address.
 
-OpenClaw deliberately sends `frame-ancestors 'none'` for its Control UI. `auto_agent` therefore does **not** weaken that CSP just to force the UI into an iframe. Native interfaces are opened as authenticated top-level pages while preserving their upstream browser security headers.
+OpenClaw deliberately sends `frame-ancestors 'none'` for its Control UI. `auto_agent` therefore does not weaken that CSP just to force the UI into an iframe. Native interfaces are opened as authenticated top-level pages while preserving their upstream browser security headers.
 
 ### Unified Chat routing
 
@@ -148,8 +169,7 @@ Security boundaries:
 - If UFW is already active, matching LAN-only rules are also added.
 - Nginx overwrites client-address and trusted identity headers rather than accepting browser-supplied values.
 - OpenClaw trusts only same-host proxy source `127.0.0.1` with explicit `allowLoopback`.
-- OpenClaw trusted-proxy configuration is applied atomically with `config patch` and validated before restart.
-- The verified proxy identity receives the operator scope required for the native Control UI; external clients cannot provide that identity directly because the Gateway is loopback-only.
+- OpenClaw trusted-proxy configuration is applied atomically and validated before restart.
 - Hermes requests are translated back to loopback Host/Origin at the backend rather than exposing its management server directly.
 
 > LAN access currently uses HTTP. Login prevents unauthenticated use, but HTTP does not protect credentials/session traffic from an attacker capable of sniffing or modifying that LAN. Use HTTPS/mTLS or a trusted overlay network for untrusted networks or cross-site access.
@@ -194,13 +214,13 @@ The inference API token is never published through mDNS or discovery metadata. I
 GPU server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | bash
+curl -fsSL -H 'Cache-Control: no-cache' "https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh?$(date +%s)" | bash
 ```
 
 Laptop:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | bash
+curl -fsSL -H 'Cache-Control: no-cache' "https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh?$(date +%s)" | bash
 ```
 
 Then open the URL printed by the laptop installer from any browser on the same LAN and log in.

@@ -16,7 +16,8 @@ die(){ printf '\033[1;31m[OPENCLAW-SSO:FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ $EUID -ne 0 ]] || die "Run as normal Ubuntu user"
 [[ -r "$ENV_FILE" ]] || die "Control Center credential file missing: $ENV_FILE"
-[[ -r "$NGINX_CONFIG" ]] || die "Unified Nginx config missing: $NGINX_CONFIG"
+command -v sudo >/dev/null 2>&1 || die "sudo required"
+sudo test -f "$NGINX_CONFIG" || die "Unified Nginx config missing: $NGINX_CONFIG"
 command -v python3 >/dev/null 2>&1 || die "python3 required"
 command -v openssl >/dev/null 2>&1 || die "openssl required"
 
@@ -134,12 +135,13 @@ assert "operator.admin" in set((a.get("identityScopes") or {}).get(identity, [])
 PY
 ok "OpenClaw trusted-proxy SSO policy verified"
 
-# The proxy must overwrite identity/client evidence itself; never trust browser
-# supplied values. These checks refuse SSO if the unified proxy lost that boundary.
-grep -Fq 'auth_request /_auth' "$NGINX_CONFIG" || die "Nginx session auth_request missing"
-grep -Fq 'proxy_set_header X-Forwarded-User' "$NGINX_CONFIG" || die "Nginx trusted identity header overwrite missing"
-grep -Fq 'proxy_set_header X-Forwarded-For $remote_addr;' "$NGINX_CONFIG" || die "Nginx client-address overwrite missing"
-grep -Fq "proxy_pass http://127.0.0.1:${OPENCLAW_BACKEND_PORT};" "$NGINX_CONFIG" || die "OpenClaw backend must remain loopback-only"
+# The Nginx config is intentionally root-owned mode 0600. Inspect it through
+# sudo rather than weakening its permissions just so the unprivileged installer
+# process can read it.
+sudo grep -Fq 'auth_request /_auth' "$NGINX_CONFIG" || die "Nginx session auth_request missing"
+sudo grep -Fq 'proxy_set_header X-Forwarded-User' "$NGINX_CONFIG" || die "Nginx trusted identity header overwrite missing"
+sudo grep -Fq 'proxy_set_header X-Forwarded-For $remote_addr;' "$NGINX_CONFIG" || die "Nginx client-address overwrite missing"
+sudo grep -Fq "proxy_pass http://127.0.0.1:${OPENCLAW_BACKEND_PORT};" "$NGINX_CONFIG" || die "OpenClaw backend must remain loopback-only"
 ok "Nginx authenticated identity boundary verified"
 
 "$OPENCLAW" gateway restart --safe >/dev/null 2>&1 || "$OPENCLAW" gateway restart >/dev/null 2>&1 || true

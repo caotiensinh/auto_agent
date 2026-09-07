@@ -1,206 +1,159 @@
 # auto_agent
 
-One-command local AI cluster deployment for Ubuntu.
+One-command, inventory-first deployment for a local AI control plane.
 
-The same command is used on both machines:
+Run the same command on the NVIDIA Ubuntu PC first, then on the Ubuntu laptop:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | bash
 ```
 
-Run it on the **Ubuntu NVIDIA GPU PC first**, then run the exact same command on the **Ubuntu laptop**.
+## Core rule
 
-## What it deploys
+The installer no longer reinstalls components blindly. Every run follows:
 
 ```text
-Ubuntu Laptop / Control Plane
-├── OpenClaw Gateway
-│   ├── messaging / orchestration
-│   ├── Ollama native API: /api/*
-│   └── conservative default tool policy
-├── Hermes Agent
-│   ├── technical execution / coding / SSH / MCP
-│   └── OpenAI-compatible API: /v1/*
-└── mDNS + SSH secure pairing
-          │
-          │ LAN
-          ▼
-Ubuntu NVIDIA GPU / Inference Plane
-├── Nginx authenticated AI gateway
-│   ├── automatic LAN IP/subnet detection
-│   ├── Bearer token authentication
-│   └── LAN ACL
-├── Ollama bound to 127.0.0.1 only
-├── qwen3.5:9b by default
-└── NVIDIA GPU
+Inventory
+  ↓
+Compare current state
+  ↓
+Reuse healthy components
+  ↓
+Install only missing components
+  ↓
+Apply only required configuration
+  ↓
+Verify
 ```
 
-## Automatic role selection
+## GPU server preflight
 
-`install.sh` detects the machine role automatically:
+Before package/component changes, the server prints:
 
-- working NVIDIA GPU / NVIDIA PCI device → `server`
-- otherwise → `client`
+- Ubuntu, kernel and hostname
+- NVIDIA hardware presence
+- every NVIDIA GPU model
+- NVIDIA driver version
+- VRAM and PCI bus ID
+- installed NVIDIA driver package evidence
+- Ollama presence/version
+- all currently installed Ollama models
+- model tool capabilities and context window
 
-You can override it:
+If NVIDIA hardware and the driver are already healthy, they are reused and not changed.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | ROLE=server bash
+If the NVIDIA driver is missing/broken, automatic installation is limited by default to allowed branches:
+
+```text
+580 595
 ```
 
-or:
+After a new driver is installed, the installer stops and requires a reboot before continuing.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | ROLE=client bash
+## Ollama and model reuse
+
+- Existing Ollama is reused by default.
+- Ollama is updated only when `UPDATE_OLLAMA=1` is explicitly set.
+- Existing models are inventoried before model download.
+- If an installed model supports tools and at least the configured agent context, the installer reuses it.
+- If no installed model satisfies the policy, only the fallback model is downloaded.
+
+Default fallback:
+
+```text
+qwen3.5:9b
 ```
 
-## GPU server — automatic tasks
-
-The server installer automatically:
-
-1. verifies Ubuntu and NVIDIA driver health with `nvidia-smi`;
-2. installs required packages;
-3. installs/updates Ollama;
-4. binds Ollama to `127.0.0.1:11434` only;
-5. configures a 65,536-token default context;
-6. pulls the selected model;
-7. detects the active LAN interface, IP and CIDR;
-8. generates a random 256-bit API token;
-9. configures Nginx as an authenticated LAN gateway;
-10. restricts Nginx to the detected LAN subnet;
-11. enables SSH;
-12. advertises `_local-ai._tcp` over mDNS/Avahi;
-13. stores client bootstrap metadata with mode `0600`;
-14. adds narrow UFW rules when UFW is already active;
-15. verifies both Ollama native and OpenAI-compatible APIs.
-
-The API token is **not** published through mDNS and is **not** printed to the terminal.
-
-## Laptop — automatic tasks
-
-The laptop installer automatically:
-
-1. installs mDNS and SSH prerequisites;
-2. discovers the GPU server through `_local-ai._tcp`;
-3. learns server hostname/IP/port/model automatically;
-4. creates an SSH key if one does not exist;
-5. establishes SSH trust;
-6. retrieves the generated API credential over SSH;
-7. tests both remote API transports;
-8. installs/updates Hermes Agent non-interactively;
-9. configures Hermes to use the remote `/v1` endpoint;
-10. installs/updates OpenClaw non-interactively;
-11. configures OpenClaw to use Ollama native `/api/*` transport;
-12. selects the discovered model;
-13. installs/restarts the OpenClaw Gateway service;
-14. verifies the provider and runs OpenClaw doctor.
-
-### First pairing
-
-If SSH key trust does not already exist, the laptop may ask for the **GPU server Ubuntu account password once** while `ssh-copy-id` establishes the trust relationship.
-
-This is intentional. Securely transferring a generated secret between two previously unrelated machines requires an existing trust anchor or one human pairing step.
-
-After pairing, reruns are automatic.
-
-## Defaults
-
-| Setting | Default |
-|---|---|
-| Model | `qwen3.5:9b` |
-| Context | `65536` |
-| Gateway port | `11434` |
-| Ollama backend | `127.0.0.1:11434` |
-| Discovery | `_local-ai._tcp` |
-| OpenClaw tool profile | `messaging` |
-| OpenClaw heartbeat | disabled (`0m`) |
-
-## Model override
-
-Because a pipe has separate process environments, set deployment variables on the `bash` side:
+Force a model:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | MODEL=qwen3.5:27b bash
 ```
 
-Larger context:
+## Laptop reuse
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | CONTEXT_LENGTH=131072 bash
-```
+Before modifying the laptop, the installer reports whether Hermes, OpenClaw and local Ollama already exist.
 
-Force server and select a model:
+- Existing Hermes → reuse; only reconcile remote model endpoint config.
+- Missing Hermes → install Hermes only.
+- Existing OpenClaw → reuse; only reconcile provider/policy config.
+- Missing OpenClaw → install OpenClaw only.
+- Existing local Ollama on the laptop is preserved and not replaced.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | ROLE=server MODEL=qwen3.5:27b bash
-```
-
-## Rotate API token
-
-Run on the GPU server:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | ROLE=server ROTATE_TOKEN=1 bash
-```
-
-Then rerun the standard command on the laptop so Hermes and OpenClaw obtain the new credential over SSH.
-
-## After deployment
-
-Hermes:
-
-```bash
-hermes
-```
-
-OpenClaw status:
-
-```bash
-openclaw status
-```
-
-OpenClaw dashboard:
-
-```bash
-openclaw dashboard
-```
-
-GPU status:
-
-```bash
-nvidia-smi
-ollama ps
-```
-
-## Files
+Optional intentional upgrades:
 
 ```text
-.
-├── install.sh
-├── scripts/
-│   ├── server.sh
-│   └── client.sh
-├── docs/
-│   ├── ARCHITECTURE.md
-│   └── SECURITY.md
-└── README.md
+UPDATE_OLLAMA=1
+UPDATE_HERMES=1
+UPDATE_OPENCLAW=1
+ROTATE_TOKEN=1
 ```
 
-## Security model
+## Resilient GPU-server discovery
 
-The design intentionally separates responsibilities:
+The laptop no longer depends on mDNS alone. Discovery order is:
 
-- **OpenClaw**: gateway, messaging and orchestration;
-- **Hermes**: technical/agent execution;
-- **Nginx**: authenticated LAN inference gateway;
-- **Ollama**: localhost-only inference service;
-- **GPU server**: inference plane;
-- **laptop**: control plane.
+1. explicit server IP override
+2. cached previously-working server
+3. `_local-ai._tcp` mDNS
+4. `/auto-agent/discovery` scan on the local IPv4 subnet
+5. legacy v0.1 `:11434` HTTP-401 fingerprint scan
 
-OpenClaw starts with the `messaging` tool profile and heartbeat disabled. Host shell/file access is not enabled automatically.
+The new server exposes a LAN-only non-secret endpoint:
 
-See [docs/SECURITY.md](docs/SECURITY.md) for details.
+```text
+GET /auto-agent/discovery
+```
 
-## Important deployment note
+It returns only server metadata such as IP, port, SSH user, model and context. It never exposes the API token.
 
-The convenience command executes code from the current `main` branch. For production fleets, pin deployments to a reviewed release tag or commit SHA before mass rollout.
+The API token is retrieved by the laptop through SSH.
+
+## Important hostname fix
+
+The laptop connects to SSH by GPU-server IP, not `<hostname>.local`.
+
+This is intentional because two Ubuntu machines can have the same hostname. For example, if both are named `aiserver`, mDNS hostname resolution can collide even though the GPU server is reachable at a valid address such as `192.168.11.112`.
+
+## Security
+
+- Ollama binds only to `127.0.0.1:11434` on the GPU server.
+- Nginx exposes the LAN gateway.
+- Inference requests require a generated 256-bit Bearer token.
+- Token is not published over mDNS or `/auto-agent/discovery`.
+- SSH is the secret-transfer trust channel.
+- OpenClaw starts with the `messaging` tool profile.
+- OpenClaw heartbeat is disabled initially.
+
+## Current architecture
+
+```text
+Ubuntu Laptop
+├── OpenClaw Gateway
+│   └── Ollama native /api/*
+├── Hermes Agent
+│   └── OpenAI-compatible /v1/*
+└── SSH secure credential retrieval
+           │
+           ▼
+Ubuntu NVIDIA GPU Server
+├── Nginx authenticated LAN gateway
+├── Ollama on 127.0.0.1:11434
+└── NVIDIA GPU(s)
+```
+
+## Normal deployment
+
+GPU server:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | bash
+```
+
+Then laptop:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | bash
+```
+
+If SSH trust does not yet exist, the laptop may request the GPU-server Ubuntu password once for `ssh-copy-id`. Later runs reuse that trust relationship.

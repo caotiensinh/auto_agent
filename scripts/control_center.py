@@ -143,8 +143,6 @@ def run_openclaw(message: str, conversation_id: str, client_ip: str) -> str:
             "X-Forwarded-Host": "auto-agent-control-center",
         })
     else:
-        # Same-host non-proxy fallback documented by OpenClaw for trusted-proxy mode.
-        # No X-Forwarded-* evidence is sent on this path.
         headers["Authorization"] = f"Bearer {OPENCLAW_LOCAL_PASSWORD}"
 
     req = urllib.request.Request(
@@ -183,9 +181,14 @@ input{background:#0b1220;color:#fff}button{background:#2563eb;color:#fff;border:
 .small{color:#94a3b8;font-size:13px}.err{color:#fca5a5}
 </style></head><body><form class="card" method="post" action="/login">
 <h2>Auto Agent Control Center</h2><div class="small">Hermes + OpenClaw · one LAN login</div>
-{error}<input name="username" placeholder="Username" autocomplete="username" required>
+__ERROR__<input name="username" placeholder="Username" autocomplete="username" required>
 <input name="password" type="password" placeholder="Password" autocomplete="current-password" required>
 <button type="submit">Login</button></form></body></html>"""
+
+
+def login_page(error: str = "") -> str:
+    return LOGIN_HTML.replace("__ERROR__", error)
+
 
 APP_HTML = r"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -220,10 +223,14 @@ async function loadStatus(){try{const r=await fetch('/api/status');const d=await
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "AutoAgentControl/0.2"
+    server_version = "AutoAgentControl/0.3"
 
     def log_message(self, fmt, *args):
-        print(f"[control-center] {self.real_client_ip()} {fmt % args}")
+        try:
+            ip = self.real_client_ip()
+        except Exception:
+            ip = self.client_address[0] if self.client_address else "unknown"
+        print(f"[control-center] {ip} {fmt % args}")
 
     def real_client_ip(self):
         forwarded = self.headers.get("X-Forwarded-For", "").split(",", 1)[0].strip()
@@ -293,7 +300,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.authed():
                 self.redirect("/")
             else:
-                self.send_html(200, LOGIN_HTML.format(error=""))
+                self.send_html(200, login_page())
             return
         if path == "/logout":
             self.redirect(
@@ -346,7 +353,7 @@ class Handler(BaseHTTPRequestHandler):
             attempts = [stamp for stamp in FAILED_LOGINS.get(ip, []) if now - stamp < LOGIN_WINDOW]
             FAILED_LOGINS[ip] = attempts
             if len(attempts) >= LOGIN_MAX_ATTEMPTS:
-                self.send_html(429, LOGIN_HTML.format(error='<p class="err">Too many failed logins. Try again later.</p>'))
+                self.send_html(429, login_page('<p class="err">Too many failed logins. Try again later.</p>'))
                 return
             form = parse_qs(raw.decode(errors="replace"))
             user = form.get("username", [""])[0]
@@ -357,7 +364,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.redirect("/", [("Set-Cookie", cookie)])
             else:
                 FAILED_LOGINS.setdefault(ip, []).append(now)
-                self.send_html(401, LOGIN_HTML.format(error='<p class="err">Invalid username or password</p>'))
+                self.send_html(401, login_page('<p class="err">Invalid username or password</p>'))
             return
         if path == "/api/chat":
             if not self.authed():

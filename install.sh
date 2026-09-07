@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-AUTO_AGENT_BOOTSTRAP_VERSION="0.6.1"
+AUTO_AGENT_BOOTSTRAP_VERSION="0.6.2"
 REPO_RAW="${AUTO_AGENT_REPO_RAW:-https://raw.githubusercontent.com/caotiensinh/auto_agent/main}"
 ROLE="${ROLE:-auto}"
 ROTATE_CONTROL_SECRETS="${ROTATE_CONTROL_SECRETS:-0}"
@@ -127,8 +127,8 @@ download_component scripts/unified_control_v2.sh "$UNIFIED_TMP" 'AUTO_AGENT_COMP
 run_bash_component "$UNIFIED_TMP"
 
 UI_TMP="$(mktemp)"
-log "CLIENT PHASE 3/3 — collapsible edge-to-edge Auto Agent workspace"
-download_component scripts/ui_upgrade.sh "$UI_TMP" 'AUTO_AGENT_COMPONENT=ui-v061'
+log "CLIENT PHASE 3/3 — persistent history + formatted raw-agent workspace"
+download_component scripts/ui_upgrade.sh "$UI_TMP" 'AUTO_AGENT_COMPONENT=ui-v062'
 run_bash_component "$UI_TMP"
 
 SSO_TMP="$(mktemp)"

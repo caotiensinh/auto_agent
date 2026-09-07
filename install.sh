@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# auto_agent one-command bootstrap.
-# Same command on both Ubuntu machines:
-#   curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | bash
-
+AUTO_AGENT_BOOTSTRAP_VERSION="0.5.0"
 REPO_RAW="${AUTO_AGENT_REPO_RAW:-https://raw.githubusercontent.com/caotiensinh/auto_agent/main}"
 ROLE="${ROLE:-auto}"
 
 log(){ printf '\033[1;34m[auto_agent]\033[0m %s\n' "$*"; }
+ok(){ printf '\033[1;32m[auto_agent:OK]\033[0m %s\n' "$*"; }
 die(){ printf '\033[1;31m[auto_agent:FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ -r /etc/os-release ]] || die "Cannot read /etc/os-release"
@@ -34,10 +32,12 @@ prepare_client_runtime_path(){
     [[ -d "$d" ]] && PATH="$d:$PATH"
   done
   export PATH
+
   if ! command -v node >/dev/null 2>&1; then
     found="$(find "$HOME/.hermes" "$HOME/.local" -maxdepth 5 -type f -name node -perm -u+x -print -quit 2>/dev/null || true)"
     [[ -n "$found" ]] && PATH="$(dirname "$found"):$PATH" && export PATH
   fi
+
   if command -v node >/dev/null 2>&1; then
     log "Node runtime: $(command -v node) ($(node --version 2>/dev/null || echo unknown)) [REUSE]"
   elif [[ -x "$HOME/.local/bin/openclaw" || -x "$HOME/.openclaw/bin/openclaw" ]]; then
@@ -48,8 +48,12 @@ prepare_client_runtime_path(){
 }
 
 download_component(){
-  local path="$1" out="$2" marker="$3"
-  curl -fsSL --proto '=https' --tlsv1.2 "${REPO_RAW}/${path}" -o "$out"
+  local path="$1" out="$2" marker="$3" bust url
+  bust="$(date +%s%N 2>/dev/null || date +%s)"
+  url="${REPO_RAW}/${path}?auto_agent_cache_bust=${bust}"
+  curl -fsSL --proto '=https' --tlsv1.2 \
+    -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+    "$url" -o "$out"
   [[ -s "$out" ]] || die "Downloaded ${path} is empty"
   grep -q '^#!/usr/bin/env bash' "$out" || die "Unexpected ${path} format"
   grep -q "$marker" "$out" || die "Downloaded ${path} failed component identity check"
@@ -63,36 +67,44 @@ case "$ROLE" in
   *) die "ROLE must be auto, server, or client" ;;
 esac
 
-log "Ubuntu: ${PRETTY_NAME:-$VERSION_ID}"
-log "Selected role: $ROLE"
+printf '\n============================================================\n'
+printf 'AUTO_AGENT BOOTSTRAP\n'
+printf 'Version : %s\n' "$AUTO_AGENT_BOOTSTRAP_VERSION"
+printf 'Ubuntu  : %s\n' "${PRETTY_NAME:-$VERSION_ID}"
+printf 'Role    : %s\n' "$ROLE"
+printf '============================================================\n\n'
+
 [[ "$ROLE" == client ]] && prepare_client_runtime_path
 
 TMP="$(mktemp)"
 SVC_TMP=""
 UNIFIED_TMP=""
-cleanup(){ rm -f "$TMP"; [[ -z "$SVC_TMP" ]] || rm -f "$SVC_TMP"; [[ -z "$UNIFIED_TMP" ]] || rm -f "$UNIFIED_TMP"; }
+cleanup(){
+  rm -f "$TMP"
+  [[ -z "$SVC_TMP" ]] || rm -f "$SVC_TMP"
+  [[ -z "$UNIFIED_TMP" ]] || rm -f "$UNIFIED_TMP"
+}
 trap cleanup EXIT
 
 if [[ "$ROLE" == server ]]; then
-  log "Downloading scripts/server.sh from caotiensinh/auto_agent..."
+  log "SERVER PHASE — inventory/reuse/configure/verify"
   download_component scripts/server.sh "$TMP" 'AUTO_AGENT_COMPONENT=server'
   exec bash "$TMP"
 fi
 
-# Client phase 1: agent/model connectivity reconciliation.
-log "Downloading scripts/client.sh from caotiensinh/auto_agent..."
+log "CLIENT PHASE 1/3 — agent + GPU connectivity reconciliation"
 download_component scripts/client.sh "$TMP" 'AUTO_AGENT_COMPONENT=client'
 bash "$TMP"
+ok "CLIENT PHASE 1/3 completed"
 prepare_client_runtime_path
 
-# Client phase 2: boot persistence and loopback agent services.
 SVC_TMP="$(mktemp)"
-log "Downloading scripts/client_services.sh from caotiensinh/auto_agent..."
+log "CLIENT PHASE 2/3 — boot persistence + loopback agent services"
 download_component scripts/client_services.sh "$SVC_TMP" 'AUTO_AGENT_COMPONENT=client-services'
 LAN_CONTROL=0 bash "$SVC_TMP"
+ok "CLIENT PHASE 2/3 completed"
 
-# Client phase 3: one authenticated LAN web UI for Hermes + OpenClaw.
 UNIFIED_TMP="$(mktemp)"
-log "Downloading scripts/unified_control.sh from caotiensinh/auto_agent..."
+log "CLIENT PHASE 3/3 — authenticated unified LAN Control Center"
 download_component scripts/unified_control.sh "$UNIFIED_TMP" 'AUTO_AGENT_COMPONENT=unified-control'
 exec bash "$UNIFIED_TMP"

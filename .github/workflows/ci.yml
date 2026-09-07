@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.5.5"' install.sh
+          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.5.6"' install.sh
           grep -q 'Cache-Control: no-cache' install.sh
           grep -q 'auto_agent_cache_bust=' install.sh
           grep -q 'CLIENT PHASE 1/3' install.sh
@@ -152,6 +152,19 @@ jobs:
           grep -Fq 'systemctl --user restart "$UNIT"' scripts/unified_control.sh
           grep -q 'Control Center backend reachable' scripts/unified_control.sh
           grep -q 'journalctl --user -u "$UNIT" -n 80' scripts/unified_control.sh
+
+      - name: Unified Chat long-running API contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'CENTER_API_TIMEOUT="${CONTROL_CENTER_API_TIMEOUT:-930}"' scripts/unified_control.sh
+          grep -Fq 'location ^~ /api/' scripts/unified_control.sh
+          grep -Fq 'proxy_read_timeout ${CENTER_API_TIMEOUT}s;' scripts/unified_control.sh
+          grep -Fq 'proxy_send_timeout ${CENTER_API_TIMEOUT}s;' scripts/unified_control.sh
+          grep -Fq 'proxy_buffering off;' scripts/unified_control.sh
+          grep -q 'async function jsonResponse' scripts/control_center.py
+          grep -q 'expected JSON, received' scripts/control_center.py
+          ! grep -q 'const d=await r.json()' scripts/control_center.py
 
       - name: OpenClaw single-login SSO contracts
         shell: bash

@@ -30,11 +30,11 @@ jobs:
           bash -n scripts/ui_upgrade.sh
           python3 -m py_compile scripts/control_center.py scripts/control_center_v2.py scripts/control_center_v3.py
 
-      - name: Bootstrap v0.6.0 contracts
+      - name: Bootstrap v0.6.1 contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.6.0"' install.sh
+          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.6.1"' install.sh
           grep -q 'Cache-Control: no-cache' install.sh
           grep -q 'auto_agent_cache_bust=' install.sh
           grep -q 'run_bash_component' install.sh
@@ -43,6 +43,7 @@ jobs:
           grep -Fq 'scripts/unified_control_v2.sh' install.sh
           grep -Fq 'scripts/ui_upgrade.sh' install.sh
           grep -Fq 'scripts/openclaw_sso_v2.sh' install.sh
+          grep -Fq "AUTO_AGENT_COMPONENT=ui-v061" scripts/ui_upgrade.sh
           ! grep -Fq 'download_component scripts/unified_control.sh "$UNIFIED_TMP"' install.sh
           ! grep -Fq 'download_component scripts/openclaw_sso.sh "$SSO_TMP"' install.sh
 
@@ -136,15 +137,20 @@ jobs:
           assert "/sso/openclaw" in m.app_page()
           PY
 
-      - name: UI v0.6.0 contracts
+      - name: UI v0.6.1 contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'AUTO_AGENT_COMPONENT=ui-v060' scripts/ui_upgrade.sh
+          grep -Fq 'AUTO_AGENT_COMPONENT=ui-v061' scripts/ui_upgrade.sh
           grep -Fq 'control_center_ui.html' scripts/ui_upgrade.sh
           grep -Fq 'control_center_v3.py' scripts/ui_upgrade.sh
+          grep -Fq 'Collapsible desktop sidebar installed' scripts/ui_upgrade.sh
+          grep -Fq 'Top horizontal bar removed' scripts/ui_upgrade.sh
           grep -Fq 'Existing SSO/auth/backend logic preserved' scripts/ui_upgrade.sh
           grep -Fq 'class="sidebar"' scripts/control_center_ui.html
+          grep -Fq 'id="sidebarToggle"' scripts/control_center_ui.html
+          grep -Fq 'sidebar-collapsed' scripts/control_center_ui.html
+          grep -Fq "localStorage.getItem('auto_agent_sidebar_collapsed')" scripts/control_center_ui.html
           grep -Fq 'class="composer-wrap"' scripts/control_center_ui.html
           grep -Fq '<textarea id="prompt"' scripts/control_center_ui.html
           grep -Fq 'id="mode"' scripts/control_center_ui.html
@@ -152,7 +158,8 @@ jobs:
           grep -Fq 'data-tab="openclaw"' scripts/control_center_ui.html
           grep -Fq "const hermesUrl=isPublic?'/sso/hermes'" scripts/control_center_ui.html
           grep -Fq "const openclawUrl=isPublic?'/sso/openclaw'" scripts/control_center_ui.html
-          grep -Fq 'AutoAgentControl/0.6.0' scripts/control_center_v3.py
+          ! grep -Fq 'class="topbar"' scripts/control_center_ui.html
+          grep -Fq 'AutoAgentControl/0.6.1' scripts/control_center_v3.py
           grep -Fq 'backend.APP_HTML = ui' scripts/control_center_v3.py
 
       - name: Nginx public boundary contracts

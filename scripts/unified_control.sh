@@ -9,6 +9,10 @@ HERMES_BACKEND_PORT="${HERMES_DASHBOARD_PORT:-9119}"
 OPENCLAW_BACKEND_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 HERMES_PUBLIC_PORT="${HERMES_PUBLIC_PORT:-9120}"
 OPENCLAW_PUBLIC_PORT="${OPENCLAW_PUBLIC_PORT:-18790}"
+PUBLIC_DOMAIN="${AUTO_AGENT_PUBLIC_DOMAIN:-kumakenchi.jp}"
+CENTER_PUBLIC_HOST="${AUTO_AGENT_CENTER_PUBLIC_HOST:-workspace.${PUBLIC_DOMAIN}}"
+HERMES_PUBLIC_HOST="${AUTO_AGENT_HERMES_PUBLIC_HOST:-hermes.${PUBLIC_DOMAIN}}"
+OPENCLAW_PUBLIC_HOST="${AUTO_AGENT_OPENCLAW_PUBLIC_HOST:-openclaw.${PUBLIC_DOMAIN}}"
 REPO_RAW="${AUTO_AGENT_REPO_RAW:-https://raw.githubusercontent.com/caotiensinh/auto_agent/main}"
 CFG_DIR="$HOME/.config/auto_agent"
 ENV_FILE="$CFG_DIR/control.env"
@@ -26,6 +30,14 @@ command -v sudo >/dev/null || die "sudo required"
 [[ "$CENTER_API_TIMEOUT" =~ ^[0-9]+$ ]] || die "CONTROL_CENTER_API_TIMEOUT must be an integer"
 (( CENTER_API_TIMEOUT >= 60 && CENTER_API_TIMEOUT <= 3600 )) \
   || die "CONTROL_CENTER_API_TIMEOUT must be between 60 and 3600 seconds"
+
+python3 - "$CENTER_PUBLIC_HOST" "$HERMES_PUBLIC_HOST" "$OPENCLAW_PUBLIC_HOST" <<'PY'
+import re, sys
+pat = re.compile(r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$")
+for host in sys.argv[1:]:
+    if not pat.fullmatch(host):
+        raise SystemExit(f"invalid public hostname: {host!r}")
+PY
 
 PATH="$HOME/.local/bin:$HOME/.hermes/bin:$HOME/.hermes/node/bin:$HOME/.openclaw/bin:$PATH"
 export PATH
@@ -60,6 +72,7 @@ print(ipaddress.ip_interface(sys.argv[1]).network)
 PY
 )"
 ok "LAN: $iface / $LAPTOP_IP / $LAN_CIDR"
+ok "Public routes: $CENTER_PUBLIC_HOST / $HERMES_PUBLIC_HOST / $OPENCLAW_PUBLIC_HOST"
 
 mkdir -p "$CFG_DIR" "$APP_DIR"; chmod 700 "$CFG_DIR" "$APP_DIR"
 touch "$ENV_FILE"; chmod 600 "$ENV_FILE"
@@ -96,10 +109,11 @@ systemctl --user is-active --quiet auto-agent-hermes-dashboard.service \
 
 # Apply OpenClaw's trusted-proxy configuration as one atomic patch. Batch/patch
 # validation sees only the final state, avoiding transient invalid auth modes.
-python3 - "$OPENCLAW_LOCAL_PASSWORD" "$LAPTOP_IP" "$OPENCLAW_PUBLIC_PORT" "$AUTO_AGENT_PROXY_IDENTITY" <<'PY' \
+python3 - "$OPENCLAW_LOCAL_PASSWORD" "$LAPTOP_IP" "$OPENCLAW_PUBLIC_PORT" "$AUTO_AGENT_PROXY_IDENTITY" "$OPENCLAW_PUBLIC_HOST" <<'PY' \
   | "$OPENCLAW" config patch --stdin >/dev/null
 import json,sys
-password, ip, port, identity = sys.argv[1:]
+password, ip, port, identity, public_host = sys.argv[1:]
+origins = [f"http://{ip}:{port}", f"https://{public_host}"]
 print(json.dumps({
   "gateway": {
     "mode": "local",
@@ -118,7 +132,7 @@ print(json.dumps({
       }
     },
     "controlUi": {
-      "allowedOrigins": [f"http://{ip}:{port}"]
+      "allowedOrigins": origins
     },
     "http": {
       "endpoints": {
@@ -130,7 +144,7 @@ print(json.dumps({
 PY
 "$OPENCLAW" config validate >/dev/null || die "OpenClaw unified-control config validation failed"
 "$OPENCLAW" gateway restart --safe >/dev/null 2>&1 || "$OPENCLAW" gateway restart >/dev/null 2>&1 || true
-ok "OpenClaw loopback gateway configured for authenticated trusted proxy + chat API"
+ok "OpenClaw loopback gateway configured for LAN + HTTPS public origin"
 
 mkdir -p "$HOME/.config/systemd/user"
 unit_path="$HOME/.config/systemd/user/$UNIT"
@@ -149,6 +163,9 @@ Environment=AUTO_AGENT_CENTER_HOST=127.0.0.1
 Environment=AUTO_AGENT_CENTER_PORT=$CENTER_INTERNAL_PORT
 Environment=AUTO_AGENT_HERMES_PUBLIC_PORT=$HERMES_PUBLIC_PORT
 Environment=AUTO_AGENT_OPENCLAW_PUBLIC_PORT=$OPENCLAW_PUBLIC_PORT
+Environment=AUTO_AGENT_CENTER_PUBLIC_HOST=$CENTER_PUBLIC_HOST
+Environment=AUTO_AGENT_HERMES_PUBLIC_HOST=$HERMES_PUBLIC_HOST
+Environment=AUTO_AGENT_OPENCLAW_PUBLIC_HOST=$OPENCLAW_PUBLIC_HOST
 Environment=AUTO_AGENT_HERMES_BIN=$HERMES
 Environment=AUTO_AGENT_OPENCLAW_BIN=$OPENCLAW
 Environment=AUTO_AGENT_OPENCLAW_URL=http://127.0.0.1:$OPENCLAW_BACKEND_PORT
@@ -183,12 +200,53 @@ if [[ "$backend_ok" != 1 ]]; then
 fi
 ok "Control Center backend reachable on 127.0.0.1:${CENTER_INTERNAL_PORT}"
 
-NAV='<div id="auto-agent-nav" style="position:fixed;top:8px;right:8px;z-index:2147483647;background:#111827;color:#fff;padding:8px 10px;border-radius:9px;font:13px sans-serif;box-shadow:0 4px 18px #0008"><a style="color:#fff;text-decoration:none;margin-right:10px" href="http://'"$LAPTOP_IP"':'"$CENTER_PORT"'/">Auto Agent</a><a style="color:#fff;text-decoration:none;margin-right:10px" href="http://'"$LAPTOP_IP"':'"$HERMES_PUBLIC_PORT"'/">Hermes</a><a style="color:#fff;text-decoration:none" href="http://'"$LAPTOP_IP"':'"$OPENCLAW_PUBLIC_PORT"'/">OpenClaw</a></div>'
+# Nginx may serve both LAN clients and the local cloudflared connector. Public
+# native access never trusts a client-provided Cloudflare header by itself: the
+# request must also arrive from 127.0.0.1 and match one exact configured native
+# hostname. LAN clients continue to require the Auto Agent session cookie.
+NAV='<div id="auto-agent-nav" style="position:fixed;top:8px;right:8px;z-index:2147483647;background:#111827;color:#fff;padding:8px 10px;border-radius:9px;font:13px sans-serif;box-shadow:0 4px 18px #0008"><a style="color:#fff;text-decoration:none;margin-right:10px" href="$auto_agent_center_nav_url">Auto Agent</a><a style="color:#fff;text-decoration:none;margin-right:10px" href="$auto_agent_hermes_nav_url">Hermes</a><a style="color:#fff;text-decoration:none" href="$auto_agent_openclaw_nav_url">OpenClaw</a></div>'
 
 nginx_tmp="$(mktemp)"
 cat >"$nginx_tmp" <<EOF2
 # Managed by caotiensinh/auto_agent
 map \$http_upgrade \$auto_agent_upgrade { default upgrade; '' close; }
+
+map \$host \$auto_agent_client_scheme {
+  default \$scheme;
+  ${CENTER_PUBLIC_HOST} https;
+  ${HERMES_PUBLIC_HOST} https;
+  ${OPENCLAW_PUBLIC_HOST} https;
+}
+
+map "\$remote_addr|\$host" \$auto_agent_public_access_route {
+  default 0;
+  "127.0.0.1|${HERMES_PUBLIC_HOST}" 1;
+  "127.0.0.1|${OPENCLAW_PUBLIC_HOST}" 1;
+}
+
+map \$host \$auto_agent_login_url {
+  default "http://${LAPTOP_IP}:${CENTER_PORT}/login";
+  ${HERMES_PUBLIC_HOST} "https://${CENTER_PUBLIC_HOST}/login";
+  ${OPENCLAW_PUBLIC_HOST} "https://${CENTER_PUBLIC_HOST}/login";
+}
+
+map \$host \$auto_agent_center_nav_url {
+  default "http://${LAPTOP_IP}:${CENTER_PORT}/";
+  ${HERMES_PUBLIC_HOST} "https://${CENTER_PUBLIC_HOST}/";
+  ${OPENCLAW_PUBLIC_HOST} "https://${CENTER_PUBLIC_HOST}/";
+}
+
+map \$host \$auto_agent_hermes_nav_url {
+  default "http://${LAPTOP_IP}:${HERMES_PUBLIC_PORT}/";
+  ${HERMES_PUBLIC_HOST} "https://${HERMES_PUBLIC_HOST}/";
+  ${OPENCLAW_PUBLIC_HOST} "https://${HERMES_PUBLIC_HOST}/";
+}
+
+map \$host \$auto_agent_openclaw_nav_url {
+  default "http://${LAPTOP_IP}:${OPENCLAW_PUBLIC_PORT}/";
+  ${HERMES_PUBLIC_HOST} "https://${OPENCLAW_PUBLIC_HOST}/";
+  ${OPENCLAW_PUBLIC_HOST} "https://${OPENCLAW_PUBLIC_HOST}/";
+}
 
 server {
   listen ${CENTER_PORT};
@@ -205,7 +263,8 @@ server {
     proxy_set_header Host \$http_host;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$remote_addr;
-    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-Proto \$auto_agent_client_scheme;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_connect_timeout 10s;
     proxy_send_timeout ${CENTER_API_TIMEOUT}s;
     proxy_read_timeout ${CENTER_API_TIMEOUT}s;
@@ -218,7 +277,8 @@ server {
     proxy_set_header Host \$http_host;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$remote_addr;
-    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-Proto \$auto_agent_client_scheme;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_connect_timeout 10s;
   }
 }
@@ -235,8 +295,12 @@ server {
     proxy_pass_request_body off;
     proxy_set_header Content-Length "";
     proxy_set_header Cookie \$http_cookie;
+    proxy_set_header X-Auto-Agent-Public-Access \$auto_agent_public_access_route;
+    proxy_set_header Cf-Access-Jwt-Assertion \$http_cf_access_jwt_assertion;
+    proxy_set_header X-Forwarded-Proto \$auto_agent_client_scheme;
+    proxy_set_header X-Forwarded-Host \$host;
   }
-  location @login { return 302 http://${LAPTOP_IP}:${CENTER_PORT}/login; }
+  location @login { return 302 \$auto_agent_login_url; }
   location / {
     auth_request /_auth;
     error_page 401 = @login;
@@ -246,7 +310,8 @@ server {
     proxy_set_header Origin http://127.0.0.1:${HERMES_BACKEND_PORT};
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$remote_addr;
-    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-Proto \$auto_agent_client_scheme;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection \$auto_agent_upgrade;
     proxy_set_header Accept-Encoding "";
@@ -268,8 +333,12 @@ server {
     proxy_pass_request_body off;
     proxy_set_header Content-Length "";
     proxy_set_header Cookie \$http_cookie;
+    proxy_set_header X-Auto-Agent-Public-Access \$auto_agent_public_access_route;
+    proxy_set_header Cf-Access-Jwt-Assertion \$http_cf_access_jwt_assertion;
+    proxy_set_header X-Forwarded-Proto \$auto_agent_client_scheme;
+    proxy_set_header X-Forwarded-Host \$host;
   }
-  location @login { return 302 http://${LAPTOP_IP}:${CENTER_PORT}/login; }
+  location @login { return 302 \$auto_agent_login_url; }
   location / {
     auth_request /_auth;
     error_page 401 = @login;
@@ -278,8 +347,8 @@ server {
     proxy_set_header Host 127.0.0.1:${OPENCLAW_BACKEND_PORT};
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$remote_addr;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_set_header X-Forwarded-Host \$http_host;
+    proxy_set_header X-Forwarded-Proto \$auto_agent_client_scheme;
+    proxy_set_header X-Forwarded-Host \$host;
     proxy_set_header X-Forwarded-User ${AUTO_AGENT_PROXY_IDENTITY};
     proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection \$auto_agent_upgrade;
@@ -296,7 +365,7 @@ rm -f "$nginx_tmp"
 sudo nginx -t
 sudo systemctl enable --now nginx >/dev/null
 sudo systemctl reload nginx
-ok "Nginx single-login proxy configured with LAN CIDR ACL"
+ok "Nginx LAN session boundary + Cloudflare Access native boundary configured"
 ok "Unified Chat API upstream timeout: ${CENTER_API_TIMEOUT}s"
 
 if command -v ufw >/dev/null 2>&1 && sudo ufw status 2>/dev/null | grep -q '^Status: active'; then
@@ -312,11 +381,14 @@ cat >"$HOME/.local/bin/auto-agent" <<EOF2
 #!/usr/bin/env bash
 set -Eeuo pipefail
 CENTER_URL="http://${LAPTOP_IP}:${CENTER_PORT}"
+PUBLIC_CENTER_URL="https://${CENTER_PUBLIC_HOST}"
 case "\${1:-status}" in
   center) echo "\$CENTER_URL"; command -v xdg-open >/dev/null 2>&1 && xdg-open "\$CENTER_URL" >/dev/null 2>&1 || true ;;
+  public) echo "\$PUBLIC_CENTER_URL"; command -v xdg-open >/dev/null 2>&1 && xdg-open "\$PUBLIC_CENTER_URL" >/dev/null 2>&1 || true ;;
   credentials) grep -E '^AUTO_AGENT_CONTROL_(USERNAME|PASSWORD)=' "$ENV_FILE" ;;
   status)
     echo "Control Center : \$CENTER_URL"
+    echo "Public Center  : \$PUBLIC_CENTER_URL"
     echo "Center service : \$(systemctl --user is-active $UNIT 2>/dev/null || true)"
     echo "Hermes UI      : \$(systemctl --user is-active auto-agent-hermes-dashboard.service 2>/dev/null || true)"
     "$OPENCLAW" gateway status || true
@@ -327,7 +399,7 @@ case "\${1:-status}" in
     sudo systemctl reload nginx
     ;;
   logs) journalctl --user -u "$UNIT" -u auto-agent-hermes-dashboard.service -n 250 --no-pager ;;
-  *) echo "Usage: auto-agent {center|credentials|status|restart|logs}" >&2; exit 2 ;;
+  *) echo "Usage: auto-agent {center|public|credentials|status|restart|logs}" >&2; exit 2 ;;
 esac
 EOF2
 chmod 700 "$HOME/.local/bin/auto-agent"
@@ -340,7 +412,10 @@ ocode="$(curl -sS -o /dev/null -w '%{http_code}' "http://${LAPTOP_IP}:${OPENCLAW
 
 printf '\n============================================================\n'
 printf 'AUTO_AGENT UNIFIED CONTROL CENTER READY\n'
-printf 'URL            : http://%s:%s\n' "$LAPTOP_IP" "$CENTER_PORT"
+printf 'LAN URL        : http://%s:%s\n' "$LAPTOP_IP" "$CENTER_PORT"
+printf 'Public URL     : https://%s\n' "$CENTER_PUBLIC_HOST"
+printf 'Hermes public  : https://%s\n' "$HERMES_PUBLIC_HOST"
+printf 'OpenClaw public: https://%s\n' "$OPENCLAW_PUBLIC_HOST"
 printf 'Login user     : admin\n'
 printf 'Password       : run "auto-agent credentials" on laptop\n'
 printf 'Router         : @hermes / @openclaw / Auto\n'

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-AUTO_AGENT_BOOTSTRAP_VERSION="0.5.0"
+AUTO_AGENT_BOOTSTRAP_VERSION="0.5.1"
 REPO_RAW="${AUTO_AGENT_REPO_RAW:-https://raw.githubusercontent.com/caotiensinh/auto_agent/main}"
 ROLE="${ROLE:-auto}"
 

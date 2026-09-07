@@ -1,6 +1,6 @@
 # auto_agent
 
-One-command, inventory-first deployment for a local AI control plane.
+One-command, inventory-first deployment for a local AI control plane using Hermes + OpenClaw + a remote Ollama GPU server.
 
 Run the same command on the NVIDIA Ubuntu PC first, then on the Ubuntu laptop:
 
@@ -10,53 +10,28 @@ curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install
 
 ## Core rule
 
-The installer does not reinstall components blindly. Every run follows:
+Every run follows:
 
 ```text
-Inventory
-  ↓
-Compare current state
-  ↓
-Reuse healthy components
-  ↓
-Install only missing components
-  ↓
-Apply only required configuration
-  ↓
-Verify
+Inventory → Compare → Reuse healthy components → Install only missing parts → Configure → Verify
 ```
 
-## GPU server preflight
+The installer does not reinstall NVIDIA drivers, Ollama, models, Hermes, OpenClaw, Node, or system packages blindly.
 
-Before package/component changes, the server prints:
+## GPU server
 
-- Ubuntu, kernel and hostname
-- NVIDIA hardware presence
-- every NVIDIA GPU model
-- NVIDIA driver version
-- VRAM and PCI bus ID
-- installed NVIDIA driver package evidence
-- Ollama presence/version
-- all currently installed Ollama models
-- model tool capabilities and context window
+Before changes, the server inventories:
 
-If NVIDIA hardware and the driver are already healthy, they are reused and not changed.
+- Ubuntu and kernel
+- NVIDIA GPU model(s)
+- driver version
+- VRAM and PCI bus
+- NVIDIA packages
+- Ollama version
+- installed models
+- model context windows and capabilities
 
-If the NVIDIA driver is missing/broken, automatic installation is limited by default to allowed branches:
-
-```text
-580 595
-```
-
-After a new driver is installed, the installer stops and requires a reboot before continuing.
-
-## Ollama and model reuse
-
-- Existing Ollama is reused by default.
-- Ollama is updated only when `UPDATE_OLLAMA=1` is explicitly set.
-- Existing models are inventoried before model download.
-- If an installed model supports tools and at least the configured agent context, the installer reuses it.
-- If no installed model satisfies the policy, only the fallback model is downloaded.
+Healthy GPU/driver/Ollama components are reused. Existing compatible tool-capable models are reused. A fallback model is downloaded only when no installed model satisfies policy.
 
 Default fallback:
 
@@ -64,187 +39,178 @@ Default fallback:
 qwen3.5:9b
 ```
 
-Force a model:
+## Laptop
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | MODEL=qwen3.5:27b bash
-```
+The laptop reuses existing Hermes/OpenClaw/Node installations, discovers the GPU server, retrieves the inference credential through SSH, verifies a real remote inference, then reconciles the two agents.
 
-## Laptop reuse
-
-Before modifying the laptop, the installer reports whether Hermes, OpenClaw and local Ollama already exist.
-
-- Existing Hermes → reuse; only reconcile remote model endpoint config.
-- Missing Hermes → install Hermes only.
-- Existing OpenClaw → reuse; only reconcile provider/policy config.
-- Missing OpenClaw → install OpenClaw only.
-- Existing Node runtime → reuse; do not reinstall Node just because a new `curl | bash` shell has a stale PATH.
-- Existing local Ollama on the laptop is preserved and not replaced.
-
-Optional intentional upgrades:
+Boot-persistent services are enabled with systemd user services plus `loginctl linger=yes`:
 
 ```text
-UPDATE_OLLAMA=1
-UPDATE_HERMES=1
-UPDATE_OPENCLAW=1
-ROTATE_TOKEN=1
+Hermes Gateway
+Hermes Dashboard
+OpenClaw Gateway
+Auto Agent Control Center
 ```
 
-## Automatic start after laptop boot
+## Unified Control Center
 
-After the normal client reconciliation succeeds, the same one-line installer also reconciles persistent services.
+After client deployment, users do not need to open two separate URLs manually.
 
-The laptop automatically enables:
+The laptop exposes one authenticated LAN entry point:
 
 ```text
-systemd user manager + loginctl linger
-├── hermes-gateway.service
-├── auto-agent-hermes-dashboard.service
-└── OpenClaw Gateway managed service
+http://LAPTOP_IP:8088
 ```
 
-`loginctl linger=yes` keeps the user service manager alive after logout and allows enabled user services to start during boot without waiting for a GUI login.
+A PC on the same LAN needs only a web browser. It does not need Hermes, OpenClaw, Node, Python, or Ollama installed.
 
-The installer reuses existing healthy services. It creates/reinstalls a service definition only when the service is missing or disabled.
-
-### Hermes
-
-Two separate Hermes components are kept running:
-
-1. **Hermes Gateway** — messaging, cron and background gateway work.
-2. **Hermes Web Dashboard** — browser management UI and Chat surface.
-
-Default local dashboard:
+The Control Center has four main views:
 
 ```text
-http://127.0.0.1:9119
+Unified Chat | Hermes | OpenClaw | Status
 ```
 
-The dashboard service checks whether Hermes `web` + `pty` dependencies already exist. They are reused when present; only those missing extras are installed when necessary.
+### Unified Chat routing
 
-### OpenClaw
-
-The OpenClaw Gateway is installed/enabled as its managed systemd user service, started if stopped, and verified through the real Gateway RPC status before the deployment is declared ready.
-
-## Unified local control command
-
-The installer creates:
+Explicit routing:
 
 ```text
-~/.local/bin/auto-agent
+@hermes check this Ubuntu network problem
+@openclaw send a notification through the configured channel
 ```
 
-Commands:
+`@hermes` routes the prompt to Hermes one-shot agent execution.
 
-```bash
-auto-agent status
-auto-agent start
-auto-agent stop
-auto-agent restart
-auto-agent logs
+`@openclaw` routes the prompt to OpenClaw's Gateway Chat Completions endpoint.
+
+`Auto` mode applies a lightweight task router:
+
+- code / shell / SSH / Linux / network / security / diagnostics → Hermes
+- messaging / channels / scheduling / notifications / orchestration → OpenClaw
+
+The selected agent is shown in the Unified Chat response.
+
+### Native agent interfaces
+
+The `Hermes` menu embeds the real Hermes Dashboard.
+
+The `OpenClaw` menu embeds the real OpenClaw Control UI.
+
+The user can move between both from the same outer Control Center without typing addresses or credentials again.
+
+## Single login
+
+The first Control Center installation creates local credentials automatically:
+
+```text
+username: admin
+password: generated random secret
 ```
 
-Open Hermes CLI:
+Credentials are stored mode `0600` under:
 
-```bash
-auto-agent hermes
+```text
+~/.config/auto_agent/control.env
 ```
 
-Open Hermes Dashboard:
+They are reused on later installer runs.
 
-```bash
-auto-agent hermes-dashboard
-```
-
-Open OpenClaw Control UI:
-
-```bash
-auto-agent openclaw-dashboard
-```
-
-The normal local-control default deliberately does **not** expose either management UI to the LAN.
-
-## Optional authenticated LAN control
-
-Remote/LAN management is opt-in because these are high-privilege agent management surfaces.
-
-Enable it during a client reconciliation with:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | LAN_CONTROL=1 bash
-```
-
-When enabled:
-
-- Hermes Dashboard binds to `0.0.0.0` and requires generated username/password authentication.
-- OpenClaw Gateway uses `gateway.bind=lan` with generated token authentication.
-- Secrets are generated locally and stored mode `0600` under `~/.config/auto_agent/control.env`.
-- Secrets are never printed during unattended installation.
-- If UFW is already active, LAN-subnet-only rules are added for the control ports.
-- The installer does not silently enable UFW on a machine where it was disabled.
-
-To reveal the generated credentials locally on the laptop:
+Display the login credentials locally on the laptop:
 
 ```bash
 auto-agent credentials
 ```
 
-## Resilient GPU-server discovery
+Open the center locally:
 
-The laptop does not depend on mDNS alone. Discovery order is:
+```bash
+auto-agent center
+```
 
-1. explicit server IP override
+The login session is shared across the laptop IP, so the authenticated Hermes/OpenClaw proxy views do not request a second login.
+
+Repeated failed logins are rate-limited by the Control Center.
+
+## Network/security architecture
+
+Hermes and OpenClaw remain loopback backends. They are not directly bound to the LAN.
+
+```text
+LAN Browser
+    |
+    | one login
+    v
+Laptop IP :8088
+Auto Agent Control Center
+    |
+    +-------------------------+
+    |                         |
+    v                         v
+Nginx authenticated proxy   Unified Chat Router
+    |                         |
+    +--> Hermes Dashboard     +--> @hermes --> hermes -z
+    |    127.0.0.1:9119       |
+    |                         +--> @openclaw --> OpenClaw /v1/chat/completions
+    +--> OpenClaw Control UI
+         127.0.0.1:18789
+              |
+              v
+        Ollama GPU gateway
+              |
+              v
+        NVIDIA GPU server
+```
+
+OpenClaw is configured for a narrowly-scoped same-host trusted reverse proxy:
+
+- Gateway stays `loopback`
+- trusted proxy is only `127.0.0.1`
+- proxy identity header is overwritten by Nginx
+- external browser access must pass Control Center login first
+- Chat Completions HTTP endpoint is enabled for the Unified Chat router
+
+Hermes Dashboard also remains on loopback and is exposed only through the authenticated Nginx hop.
+
+If UFW is already active, the installer adds LAN-subnet-only rules for the control ports. The installer does not silently enable UFW when it is disabled.
+
+> Current Control Center LAN access uses HTTP. Authentication prevents unauthenticated use, but HTTP does not protect credentials/session traffic against an attacker capable of sniffing or modifying the LAN. HTTPS/mTLS should be used for untrusted networks or cross-site deployment.
+
+## Ports
+
+| Port | Purpose | Direct backend bind |
+|---|---|---|
+| `8088` | Unified Control Center | Nginx on laptop LAN IP |
+| `9119` | Hermes view behind shared login | Hermes backend stays `127.0.0.1` |
+| `18789` | OpenClaw view behind shared login | OpenClaw backend stays `127.0.0.1` |
+| `11434` | GPU inference gateway on GPU server | Ollama stays `127.0.0.1` behind server Nginx |
+
+Users normally enter only:
+
+```text
+http://LAPTOP_IP:8088
+```
+
+## Management commands
+
+```bash
+auto-agent center
+auto-agent credentials
+auto-agent status
+auto-agent restart
+auto-agent logs
+```
+
+## Resilient GPU discovery
+
+Laptop discovery order:
+
+1. explicit override
 2. cached previously-working server
 3. `_local-ai._tcp` mDNS
-4. `/auto-agent/discovery` scan on the local IPv4 subnet
-5. legacy v0.1 `:11434` HTTP-401 fingerprint scan
+4. `/auto-agent/discovery` subnet scan
+5. legacy `:11434` HTTP-401 fingerprint scan
 
-The server exposes a LAN-only non-secret endpoint:
-
-```text
-GET /auto-agent/discovery
-```
-
-It returns only server metadata such as IP, port, SSH user, model and context. It never exposes the API token.
-
-The API token is retrieved by the laptop through SSH.
-
-## Important hostname fix
-
-The laptop connects to SSH by GPU-server IP, not `<hostname>.local`.
-
-This is intentional because two Ubuntu machines can have the same hostname. For example, if both are named `aiserver`, mDNS hostname resolution can collide even though the GPU server is reachable at a valid address such as `192.168.11.112`.
-
-## Security
-
-- Ollama binds only to `127.0.0.1:11434` on the GPU server.
-- Nginx exposes the authenticated inference gateway to the LAN.
-- Inference requests require a generated 256-bit Bearer token.
-- Token is not published over mDNS or `/auto-agent/discovery`.
-- SSH is the secret-transfer trust channel.
-- OpenClaw starts with the `messaging` tool profile.
-- OpenClaw heartbeat is disabled initially.
-- Agent management UIs are loopback-only by default.
-- LAN management requires explicit opt-in and authentication.
-
-## Current architecture
-
-```text
-Ubuntu Laptop
-├── Hermes Gateway                     [boot persistent]
-├── Hermes Dashboard :9119             [boot persistent]
-├── OpenClaw Gateway / Control UI      [boot persistent]
-├── auto-agent lifecycle CLI
-├── Hermes Agent → OpenAI-compatible /v1/*
-├── OpenClaw → Ollama native /api/*
-└── SSH secure credential retrieval
-           │
-           ▼
-Ubuntu NVIDIA GPU Server
-├── Nginx authenticated LAN inference gateway
-├── Ollama on 127.0.0.1:11434
-└── NVIDIA GPU(s)
-```
+The inference API token is not published in mDNS or discovery metadata. It is transferred through the SSH trust channel.
 
 ## Normal deployment
 
@@ -254,10 +220,10 @@ GPU server:
 curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | bash
 ```
 
-Then laptop:
+Laptop:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | bash
 ```
 
-If SSH trust does not yet exist, the laptop may request the GPU-server Ubuntu password once for `ssh-copy-id`. Later runs reuse that trust relationship.
+Then from any PC on the same LAN, open the Control Center URL printed by the laptop installer and log in.

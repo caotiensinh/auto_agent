@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-AUTO_AGENT_BOOTSTRAP_VERSION="0.5.6"
+AUTO_AGENT_BOOTSTRAP_VERSION="0.5.7"
 REPO_RAW="${AUTO_AGENT_REPO_RAW:-https://raw.githubusercontent.com/caotiensinh/auto_agent/main}"
 ROLE="${ROLE:-auto}"
 ROTATE_CONTROL_SECRETS="${ROTATE_CONTROL_SECRETS:-0}"
@@ -120,7 +120,7 @@ run_bash_component "$SVC_TMP" LAN_CONTROL=0
 ok "CLIENT PHASE 2/3 completed"
 
 UNIFIED_TMP="$(mktemp)"
-log "CLIENT PHASE 3/3 — authenticated unified LAN Control Center"
+log "CLIENT PHASE 3/3 — authenticated unified LAN + Cloudflare Control Center"
 download_component scripts/unified_control.sh "$UNIFIED_TMP" 'AUTO_AGENT_COMPONENT=unified-control'
 run_bash_component "$UNIFIED_TMP"
 

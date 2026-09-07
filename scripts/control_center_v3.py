@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Auto Agent UI shell v0.6.0.
+"""Auto Agent UI shell v0.6.1.
 
 This module reuses the security/session/router implementation from
 control_center_v2.py and replaces only the presentation template. Keeping the
@@ -24,15 +24,22 @@ assert spec and spec.loader
 spec.loader.exec_module(backend)
 
 ui = UI.read_text(encoding="utf-8")
-required = ('id="messages"', 'id="prompt"', 'id="mode"', 'id="send"', '__CENTER_PUBLIC_HOST__')
+required = (
+    'id="messages"',
+    'id="prompt"',
+    'id="mode"',
+    'id="send"',
+    'id="sidebarToggle"',
+    '__CENTER_PUBLIC_HOST__',
+)
 missing = [marker for marker in required if marker not in ui]
 if missing:
     raise SystemExit(f"UI template missing required markers: {missing}")
 
 backend.APP_HTML = ui
-backend.Handler.server_version = "AutoAgentControl/0.6.0"
+backend.Handler.server_version = "AutoAgentControl/0.6.1"
 
 if __name__ == "__main__":
     server = backend.ThreadingHTTPServer((backend.HOST, backend.PORT), backend.Handler)
-    print(f"[control-center-ui] listening on {backend.HOST}:{backend.PORT} with UI v0.6.0")
+    print(f"[control-center-ui] listening on {backend.HOST}:{backend.PORT} with UI v0.6.1")
     server.serve_forever()

@@ -29,11 +29,11 @@ jobs:
           bash -n scripts/openclaw_sso_v2.sh
           python3 -m py_compile scripts/control_center.py scripts/control_center_v2.py
 
-      - name: Bootstrap v0.5.8 contracts
+      - name: Bootstrap v0.5.9 contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.5.8"' install.sh
+          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.5.9"' install.sh
           grep -q 'Cache-Control: no-cache' install.sh
           grep -q 'auto_agent_cache_bust=' install.sh
           grep -q 'run_bash_component' install.sh
@@ -72,44 +72,60 @@ jobs:
           grep -q '/chat/completions' scripts/client.sh
           ! grep -q 'reachable=bool(rpc.get' scripts/client.sh
 
-      - name: Signed one-time SSO contracts
+      - name: Resilient native SSO contracts
         shell: bash
         run: |
           set -euo pipefail
+          grep -q 'AUTO_AGENT_SSO_TTL.*, "180"' scripts/control_center_v2.py
+          grep -q 'SSO_BRIDGE_COOKIE = "__Secure-auto_agent_sso_bridge"' scripts/control_center_v2.py
           grep -q 'def make_sso_token' scripts/control_center_v2.py
           grep -q 'def consume_sso_token' scripts/control_center_v2.py
+          grep -q '"purpose": "native-handoff"' scripts/control_center_v2.py
+          grep -q '"iss": CENTER_PUBLIC_HOST' scripts/control_center_v2.py
           grep -q 'USED_SSO_NONCES' scripts/control_center_v2.py
           grep -q 'SSO_LOCK' scripts/control_center_v2.py
-          grep -q '"/sso/hermes"' scripts/control_center_v2.py
-          grep -q '"/sso/openclaw"' scripts/control_center_v2.py
-          grep -q '"/_auto_agent_sso"' scripts/control_center_v2.py
-          grep -q 'invalid_or_replayed_sso_token' scripts/control_center_v2.py
-          grep -q 'AUTO_AGENT_NATIVE_SESSION_TTL' scripts/control_center_v2.py
-          grep -q 'AUTO_AGENT_SSO_TTL' scripts/control_center_v2.py
-          grep -q 'parts.append("Secure")' scripts/control_center_v2.py
+          grep -q 'def bridge_cookie' scripts/control_center_v2.py
+          grep -q 'f"Domain=.{PUBLIC_DOMAIN}"' scripts/control_center_v2.py
+          grep -q '"Path=/_auto_agent_sso"' scripts/control_center_v2.py
+          grep -q '"HttpOnly"' scripts/control_center_v2.py
+          grep -q '"Secure"' scripts/control_center_v2.py
+          grep -q '"SameSite=Lax"' scripts/control_center_v2.py
+          grep -q 'def sso_start' scripts/control_center_v2.py
+          grep -q 'def finish_sso' scripts/control_center_v2.py
+          grep -q 'attempt <= 1' scripts/control_center_v2.py
+          grep -q 'retry=1' scripts/control_center_v2.py
           ! grep -q 'cf_access_authed' scripts/control_center_v2.py
           ! grep -q 'Cf-Access-Jwt-Assertion' scripts/control_center_v2.py
-          ! grep -q 'Domain=.kumakenchi.jp' scripts/control_center_v2.py
 
-      - name: SSO replay test
+      - name: SSO replay and target-binding test
         shell: bash
         env:
           AUTO_AGENT_CONTROL_PASSWORD: test-password
           AUTO_AGENT_SESSION_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
           OPENCLAW_LOCAL_PASSWORD: local-password
+          AUTO_AGENT_PUBLIC_DOMAIN: example.com
           AUTO_AGENT_CENTER_PUBLIC_HOST: workspace.example.com
           AUTO_AGENT_HERMES_PUBLIC_HOST: hermes.example.com
           AUTO_AGENT_OPENCLAW_PUBLIC_HOST: openclaw.example.com
         run: |
           set -euo pipefail
           python3 - <<'PY'
+          import base64
           import importlib.util
+          import json
           spec = importlib.util.spec_from_file_location("cc", "scripts/control_center_v2.py")
           m = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(m)
           session = m.make_session(30)
           assert m.validate_session(session)
           token = m.make_sso_token("hermes")
+          payload_b64 = token.split('.', 1)[0]
+          payload = json.loads(base64.urlsafe_b64decode(payload_b64 + '=' * (-len(payload_b64) % 4)))
+          assert payload["v"] == 2
+          assert payload["purpose"] == "native-handoff"
+          assert payload["iss"] == "workspace.example.com"
+          assert payload["target"] == "hermes"
+          assert payload["host"] == "hermes.example.com"
           assert m.consume_sso_token(token, "hermes", "hermes.example.com")
           assert not m.consume_sso_token(token, "hermes", "hermes.example.com"), "SSO replay was accepted"
           wrong = m.make_sso_token("openclaw")
@@ -126,9 +142,12 @@ jobs:
           grep -Fq 'CENTER_PUBLIC_HOST="${AUTO_AGENT_CENTER_PUBLIC_HOST:-workspace.${PUBLIC_DOMAIN}}"' scripts/unified_control_v2.sh
           grep -Fq 'HERMES_PUBLIC_HOST="${AUTO_AGENT_HERMES_PUBLIC_HOST:-hermes.${PUBLIC_DOMAIN}}"' scripts/unified_control_v2.sh
           grep -Fq 'OPENCLAW_PUBLIC_HOST="${AUTO_AGENT_OPENCLAW_PUBLIC_HOST:-openclaw.${PUBLIC_DOMAIN}}"' scripts/unified_control_v2.sh
+          grep -Fq 'Environment=AUTO_AGENT_PUBLIC_DOMAIN=$PUBLIC_DOMAIN' scripts/unified_control_v2.sh
+          grep -Fq 'Environment=AUTO_AGENT_SSO_TTL=180' scripts/unified_control_v2.sh
           grep -Fq '$http_cf_connecting_ip' scripts/unified_control_v2.sh
           grep -Fq 'proxy_set_header X-Forwarded-For \$auto_agent_client_ip;' scripts/unified_control_v2.sh
           grep -Fq 'proxy_set_header X-Real-IP \$auto_agent_client_ip;' scripts/unified_control_v2.sh
+          grep -Fq 'proxy_set_header Cookie \$http_cookie;' scripts/unified_control_v2.sh
           grep -Fq 'X-Auto-Agent-SSO-Boundary 1' scripts/unified_control_v2.sh
           grep -Fq 'X-Auto-Agent-SSO-Target hermes' scripts/unified_control_v2.sh
           grep -Fq 'X-Auto-Agent-SSO-Target openclaw' scripts/unified_control_v2.sh
@@ -160,6 +179,7 @@ jobs:
           grep -q 'https://{public_host}' scripts/openclaw_sso_v2.sh
           grep -q '198.51.100.10' scripts/openclaw_sso_v2.sh
           grep -q 'trusted-proxy HTTP smoke PASS' scripts/openclaw_sso_v2.sh
+          grep -Fq 'proxy_set_header Cookie $http_cookie;' scripts/openclaw_sso_v2.sh
           grep -Fq 'proxy_set_header X-Forwarded-For $auto_agent_client_ip;' scripts/openclaw_sso_v2.sh
           ! grep -Fq 'proxy_set_header Cf-Access-Jwt-Assertion' scripts/openclaw_sso_v2.sh
           ! grep -q 'gateway restart' scripts/unified_control_v2.sh

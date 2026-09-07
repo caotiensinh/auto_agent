@@ -86,7 +86,8 @@ if [[ "$ROLE" == "client" ]]; then
 fi
 
 TMP="$(mktemp)"
-trap 'rm -f "$TMP"' EXIT
+SVC_TMP=""
+trap 'rm -f "$TMP" "${SVC_TMP:-}"' EXIT
 
 case "$ROLE" in
   server) TARGET="scripts/server.sh" ;;
@@ -100,6 +101,22 @@ curl -fsSL --proto '=https' --tlsv1.2 "${REPO_RAW}/${TARGET}" -o "$TMP"
 # Basic corruption/route guard before execution.
 grep -q '^#!/usr/bin/env bash' "$TMP" || die "Unexpected deployment script format"
 grep -q 'AUTO_AGENT_COMPONENT=' "$TMP" || die "Downloaded file is not an auto_agent deployment component"
-
 chmod 0700 "$TMP"
-exec bash "$TMP"
+
+if [[ "$ROLE" == "server" ]]; then
+  exec bash "$TMP"
+fi
+
+# Client deployment is two idempotent phases:
+#   1) agent/model connectivity reconciliation
+#   2) boot persistence + local control surfaces
+bash "$TMP"
+
+log "Downloading boot/control service reconciler..."
+SVC_TMP="$(mktemp)"
+curl -fsSL --proto '=https' --tlsv1.2 "${REPO_RAW}/scripts/client_services.sh" -o "$SVC_TMP"
+[[ -s "$SVC_TMP" ]] || die "Downloaded client service script is empty"
+grep -q '^#!/usr/bin/env bash' "$SVC_TMP" || die "Unexpected client service script format"
+grep -q 'AUTO_AGENT_COMPONENT=client-services' "$SVC_TMP" || die "Downloaded file is not the auto_agent client service component"
+chmod 0700 "$SVC_TMP"
+exec bash "$SVC_TMP"

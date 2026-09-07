@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.5.6"' install.sh
+          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.5.7"' install.sh
           grep -q 'Cache-Control: no-cache' install.sh
           grep -q 'auto_agent_cache_bust=' install.sh
           grep -q 'CLIENT PHASE 1/3' install.sh
@@ -165,6 +165,27 @@ jobs:
           grep -q 'async function jsonResponse' scripts/control_center.py
           grep -q 'expected JSON, received' scripts/control_center.py
           ! grep -q 'const d=await r.json()' scripts/control_center.py
+
+      - name: Cloudflare public native routing contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'PUBLIC_DOMAIN="${AUTO_AGENT_PUBLIC_DOMAIN:-kumakenchi.jp}"' scripts/unified_control.sh
+          grep -Fq 'CENTER_PUBLIC_HOST="${AUTO_AGENT_CENTER_PUBLIC_HOST:-workspace.${PUBLIC_DOMAIN}}"' scripts/unified_control.sh
+          grep -Fq 'HERMES_PUBLIC_HOST="${AUTO_AGENT_HERMES_PUBLIC_HOST:-hermes.${PUBLIC_DOMAIN}}"' scripts/unified_control.sh
+          grep -Fq 'OPENCLAW_PUBLIC_HOST="${AUTO_AGENT_OPENCLAW_PUBLIC_HOST:-openclaw.${PUBLIC_DOMAIN}}"' scripts/unified_control.sh
+          grep -Fq '"127.0.0.1|${HERMES_PUBLIC_HOST}" 1;' scripts/unified_control.sh
+          grep -Fq '"127.0.0.1|${OPENCLAW_PUBLIC_HOST}" 1;' scripts/unified_control.sh
+          grep -Fq 'proxy_set_header X-Auto-Agent-Public-Access $auto_agent_public_access_route;' scripts/unified_control.sh
+          grep -Fq 'proxy_set_header Cf-Access-Jwt-Assertion $http_cf_access_jwt_assertion;' scripts/unified_control.sh
+          grep -q 'def cf_access_authed' scripts/control_center.py
+          grep -q 'return boundary and bool(assertion)' scripts/control_center.py
+          grep -q "const isPublic=publicCenter&&host===publicCenter" scripts/control_center.py
+          grep -q "https://__HERMES_PUBLIC_HOST__/" scripts/control_center.py
+          grep -q "https://__OPENCLAW_PUBLIC_HOST__/" scripts/control_center.py
+          grep -q 'parts.append("Secure")' scripts/control_center.py
+          ! grep -q 'Domain=.kumakenchi.jp' scripts/control_center.py
+          grep -Fq 'f"https://{public_host}"' scripts/unified_control.sh
 
       - name: OpenClaw single-login SSO contracts
         shell: bash

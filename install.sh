@@ -89,7 +89,7 @@ prepare_client_runtime_path
 SVC_TMP="$(mktemp)"
 log "Downloading scripts/client_services.sh from caotiensinh/auto_agent..."
 download_component scripts/client_services.sh "$SVC_TMP" 'AUTO_AGENT_COMPONENT=client-services'
-bash "$SVC_TMP"
+LAN_CONTROL=0 bash "$SVC_TMP"
 
 # Client phase 3: one authenticated LAN web UI for Hermes + OpenClaw.
 UNIFIED_TMP="$(mktemp)"

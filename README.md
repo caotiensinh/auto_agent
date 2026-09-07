@@ -4,19 +4,28 @@ One-command, inventory-first deployment for a local AI control plane using Herme
 
 ## Canonical one-command install
 
-During active development, use the cache-busting form below so `raw.githubusercontent.com` cannot hand the machine an older bootstrap from CDN cache:
+Use the stdin-safe, cache-busting form below:
 
 ```bash
-curl -fsSL -H 'Cache-Control: no-cache' "https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh?$(date +%s)" | bash
+bash <(curl -fsSL -H 'Cache-Control: no-cache' "https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh?$(date +%s)")
 ```
 
 Run the same command on the NVIDIA Ubuntu PC first, then on the Ubuntu laptop.
+
+Why `bash <(curl ...)` instead of `curl ... | bash`?
+
+- the downloaded bootstrap is supplied as a script file descriptor;
+- stdin remains attached to the user's terminal for `sudo`, SSH and interactive-safe third-party CLIs;
+- a child process cannot consume the unread remainder of the bootstrap source;
+- component downloads are also cache-busted and syntax/identity checked before execution.
+
+`curl ... | bash` remains supported by bootstrap `0.5.2+` because every child component gets an isolated stdin, but process substitution is the canonical form.
 
 A correct current bootstrap prints:
 
 ```text
 AUTO_AGENT BOOTSTRAP
-Version : 0.5.0
+Version : 0.5.2
 ```
 
 On a laptop it must then show all three phases:
@@ -27,7 +36,7 @@ CLIENT PHASE 2/3 — boot persistence + loopback agent services
 CLIENT PHASE 3/3 — authenticated unified LAN Control Center
 ```
 
-If a laptop log ends immediately after `AUTO_AGENT LAPTOP READY` and never shows phase 2/3, that run used an old cached bootstrap and did not install the Control Center.
+If a laptop log ends immediately after `AUTO_AGENT LAPTOP READY` and never prints `CLIENT PHASE 1/3 completed`, the unified control phases were not executed. Bootstrap `0.5.2+` isolates component stdin specifically to prevent that failure mode.
 
 ## Core rule
 
@@ -214,13 +223,13 @@ The inference API token is never published through mDNS or discovery metadata. I
 GPU server:
 
 ```bash
-curl -fsSL -H 'Cache-Control: no-cache' "https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh?$(date +%s)" | bash
+bash <(curl -fsSL -H 'Cache-Control: no-cache' "https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh?$(date +%s)")
 ```
 
 Laptop:
 
 ```bash
-curl -fsSL -H 'Cache-Control: no-cache' "https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh?$(date +%s)" | bash
+bash <(curl -fsSL -H 'Cache-Control: no-cache' "https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh?$(date +%s)")
 ```
 
 Then open the URL printed by the laptop installer from any browser on the same LAN and log in.

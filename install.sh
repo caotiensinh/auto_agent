@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-AUTO_AGENT_BOOTSTRAP_VERSION="0.5.9"
+AUTO_AGENT_BOOTSTRAP_VERSION="0.6.0"
 REPO_RAW="${AUTO_AGENT_REPO_RAW:-https://raw.githubusercontent.com/caotiensinh/auto_agent/main}"
 ROLE="${ROLE:-auto}"
 ROTATE_CONTROL_SECRETS="${ROTATE_CONTROL_SECRETS:-0}"
@@ -91,11 +91,13 @@ printf '============================================================\n\n'
 TMP="$(mktemp)"
 SVC_TMP=""
 UNIFIED_TMP=""
+UI_TMP=""
 SSO_TMP=""
 cleanup(){
   rm -f "$TMP"
   [[ -z "$SVC_TMP" ]] || rm -f "$SVC_TMP"
   [[ -z "$UNIFIED_TMP" ]] || rm -f "$UNIFIED_TMP"
+  [[ -z "$UI_TMP" ]] || rm -f "$UI_TMP"
   [[ -z "$SSO_TMP" ]] || rm -f "$SSO_TMP"
 }
 trap cleanup EXIT
@@ -123,6 +125,11 @@ UNIFIED_TMP="$(mktemp)"
 log "CLIENT PHASE 3/3 — resilient SSO unified LAN + Cloudflare Control Center"
 download_component scripts/unified_control_v2.sh "$UNIFIED_TMP" 'AUTO_AGENT_COMPONENT=unified-control-v2'
 run_bash_component "$UNIFIED_TMP"
+
+UI_TMP="$(mktemp)"
+log "CLIENT PHASE 3/3 — Hermes-inspired navigation + modern chat workspace"
+download_component scripts/ui_upgrade.sh "$UI_TMP" 'AUTO_AGENT_COMPONENT=ui-v060'
+run_bash_component "$UI_TMP"
 
 SSO_TMP="$(mktemp)"
 log "CLIENT PHASE 3/3 — final OpenClaw trusted-proxy configuration + one restart"

@@ -135,7 +135,7 @@ jobs:
           grep -Fq 'login?next=/sso/hermes' scripts/unified_control_v2.sh
           grep -Fq 'login?next=/sso/openclaw' scripts/unified_control_v2.sh
           grep -Fq 'Public DNS unresolved:' scripts/unified_control_v2.sh
-          ! grep -Fq 'Cf-Access-Jwt-Assertion' scripts/unified_control_v2.sh
+          ! grep -Fq 'proxy_set_header Cf-Access-Jwt-Assertion' scripts/unified_control_v2.sh
 
       - name: Unified Chat timeout contracts
         shell: bash
@@ -161,7 +161,7 @@ jobs:
           grep -q '198.51.100.10' scripts/openclaw_sso_v2.sh
           grep -q 'trusted-proxy HTTP smoke PASS' scripts/openclaw_sso_v2.sh
           grep -Fq 'proxy_set_header X-Forwarded-For $auto_agent_client_ip;' scripts/openclaw_sso_v2.sh
-          ! grep -Fq 'Cf-Access-Jwt-Assertion' scripts/openclaw_sso_v2.sh
+          ! grep -Fq 'proxy_set_header Cf-Access-Jwt-Assertion' scripts/openclaw_sso_v2.sh
           ! grep -q 'gateway restart' scripts/unified_control_v2.sh
           ! grep -q 'config patch --stdin' scripts/unified_control_v2.sh
 

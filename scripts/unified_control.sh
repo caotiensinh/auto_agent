@@ -4,6 +4,7 @@ AUTO_AGENT_COMPONENT=unified-control
 
 CENTER_PORT="${CONTROL_CENTER_PORT:-8088}"
 CENTER_INTERNAL_PORT="${CONTROL_CENTER_INTERNAL_PORT:-18088}"
+CENTER_API_TIMEOUT="${CONTROL_CENTER_API_TIMEOUT:-930}"
 HERMES_BACKEND_PORT="${HERMES_DASHBOARD_PORT:-9119}"
 OPENCLAW_BACKEND_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 HERMES_PUBLIC_PORT="${HERMES_PUBLIC_PORT:-9120}"
@@ -22,6 +23,9 @@ die(){ printf '\033[1;31m[UNIFIED:FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ $EUID -ne 0 ]] || die "Run as normal Ubuntu user"
 command -v sudo >/dev/null || die "sudo required"
+[[ "$CENTER_API_TIMEOUT" =~ ^[0-9]+$ ]] || die "CONTROL_CENTER_API_TIMEOUT must be an integer"
+(( CENTER_API_TIMEOUT >= 60 && CENTER_API_TIMEOUT <= 3600 )) \
+  || die "CONTROL_CENTER_API_TIMEOUT must be between 60 and 3600 seconds"
 
 PATH="$HOME/.local/bin:$HOME/.hermes/bin:$HOME/.hermes/node/bin:$HOME/.openclaw/bin:$PATH"
 export PATH
@@ -192,6 +196,22 @@ server {
   allow 127.0.0.1;
   allow ${LAN_CIDR};
   deny all;
+
+  # Agent calls are intentionally long-running. The Python adapter permits up to
+  # 900 seconds, so Nginx must not apply its default ~60 second upstream timeout.
+  location ^~ /api/ {
+    proxy_pass http://127.0.0.1:${CENTER_INTERNAL_PORT};
+    proxy_http_version 1.1;
+    proxy_set_header Host \$http_host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$remote_addr;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_connect_timeout 10s;
+    proxy_send_timeout ${CENTER_API_TIMEOUT}s;
+    proxy_read_timeout ${CENTER_API_TIMEOUT}s;
+    proxy_buffering off;
+  }
+
   location / {
     proxy_pass http://127.0.0.1:${CENTER_INTERNAL_PORT};
     proxy_http_version 1.1;
@@ -199,6 +219,7 @@ server {
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$remote_addr;
     proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_connect_timeout 10s;
   }
 }
 
@@ -230,7 +251,6 @@ server {
     proxy_set_header Connection \$auto_agent_upgrade;
     proxy_set_header Accept-Encoding "";
     proxy_read_timeout 3600s;
-    sub_filter_types text/html;
     sub_filter_once on;
     sub_filter '<body>' '<body>${NAV}';
   }
@@ -266,7 +286,6 @@ server {
     proxy_set_header Accept-Encoding "";
     proxy_read_timeout 86400s;
     proxy_send_timeout 86400s;
-    sub_filter_types text/html;
     sub_filter_once on;
     sub_filter '<body>' '<body>${NAV}';
   }
@@ -278,6 +297,7 @@ sudo nginx -t
 sudo systemctl enable --now nginx >/dev/null
 sudo systemctl reload nginx
 ok "Nginx single-login proxy configured with LAN CIDR ACL"
+ok "Unified Chat API upstream timeout: ${CENTER_API_TIMEOUT}s"
 
 if command -v ufw >/dev/null 2>&1 && sudo ufw status 2>/dev/null | grep -q '^Status: active'; then
   for port in "$CENTER_PORT" "$HERMES_PUBLIC_PORT" "$OPENCLAW_PUBLIC_PORT"; do
@@ -327,4 +347,5 @@ printf 'Router         : @hermes / @openclaw / Auto\n'
 printf 'Native menu    : Auto Agent / Hermes / OpenClaw\n'
 printf 'LAN client     : browser only; no install required\n'
 printf 'LAN ACL        : %s\n' "$LAN_CIDR"
+printf 'API timeout    : %ss\n' "$CENTER_API_TIMEOUT"
 printf '============================================================\n'

@@ -10,26 +10,15 @@ curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install
 
 ## Core rule
 
-Every run follows:
-
 ```text
 Inventory → Compare → Reuse healthy components → Install only missing parts → Configure → Verify
 ```
 
-The installer does not reinstall NVIDIA drivers, Ollama, models, Hermes, OpenClaw, Node, or system packages blindly.
+The installer does not blindly reinstall NVIDIA drivers, Ollama, models, Hermes, OpenClaw, Node, or system packages.
 
 ## GPU server
 
-Before changes, the server inventories:
-
-- Ubuntu and kernel
-- NVIDIA GPU model(s)
-- driver version
-- VRAM and PCI bus
-- NVIDIA packages
-- Ollama version
-- installed models
-- model context windows and capabilities
+The server inventories Ubuntu/kernel, NVIDIA GPU model(s), driver version, VRAM, NVIDIA packages, Ollama version, installed models, context windows and model capabilities before making changes.
 
 Healthy GPU/driver/Ollama components are reused. Existing compatible tool-capable models are reused. A fallback model is downloaded only when no installed model satisfies policy.
 
@@ -41,9 +30,9 @@ qwen3.5:9b
 
 ## Laptop
 
-The laptop reuses existing Hermes/OpenClaw/Node installations, discovers the GPU server, retrieves the inference credential through SSH, verifies a real remote inference, then reconciles the two agents.
+The laptop reuses existing Hermes/OpenClaw/Node installations, discovers the GPU server, retrieves the inference credential through SSH, verifies real remote inference, and reconciles both agents.
 
-Boot-persistent services are enabled with systemd user services plus `loginctl linger=yes`:
+Boot-persistent components use systemd user services plus `loginctl linger=yes`:
 
 ```text
 Hermes Gateway
@@ -52,23 +41,25 @@ OpenClaw Gateway
 Auto Agent Control Center
 ```
 
-## Unified Control Center
+## One Unified Control Center
 
-After client deployment, users do not need to open two separate URLs manually.
-
-The laptop exposes one authenticated LAN entry point:
+After client deployment, users normally enter only:
 
 ```text
 http://LAPTOP_IP:8088
 ```
 
-A PC on the same LAN needs only a web browser. It does not need Hermes, OpenClaw, Node, Python, or Ollama installed.
+A different PC on the same LAN needs only a web browser. Nothing else needs to be installed on that PC.
 
-The Control Center has four main views:
+The common menu is:
 
 ```text
 Unified Chat | Hermes | OpenClaw | Status
 ```
+
+The native Hermes and OpenClaw pages keep a small common navigation menu injected by the authenticated reverse proxy, so users can switch back to Auto Agent, Hermes, or OpenClaw without typing another address.
+
+OpenClaw deliberately sends `frame-ancestors 'none'` for its Control UI. `auto_agent` therefore does **not** weaken that CSP just to force the UI into an iframe. Native interfaces are opened as authenticated top-level pages while preserving their upstream browser security headers.
 
 ### Unified Chat routing
 
@@ -79,28 +70,20 @@ Explicit routing:
 @openclaw send a notification through the configured channel
 ```
 
-`@hermes` routes the prompt to Hermes one-shot agent execution.
+- `@hermes` → Hermes one-shot agent execution (`hermes -z`).
+- `@openclaw` → OpenClaw Gateway Chat Completions endpoint.
+- `@auto` or `Auto` mode → lightweight task router.
 
-`@openclaw` routes the prompt to OpenClaw's Gateway Chat Completions endpoint.
-
-`Auto` mode applies a lightweight task router:
+Default Auto routing:
 
 - code / shell / SSH / Linux / network / security / diagnostics → Hermes
 - messaging / channels / scheduling / notifications / orchestration → OpenClaw
 
-The selected agent is shown in the Unified Chat response.
-
-### Native agent interfaces
-
-The `Hermes` menu embeds the real Hermes Dashboard.
-
-The `OpenClaw` menu embeds the real OpenClaw Control UI.
-
-The user can move between both from the same outer Control Center without typing addresses or credentials again.
+The selected agent is shown with every Unified Chat response.
 
 ## Single login
 
-The first Control Center installation creates local credentials automatically:
+The first Control Center installation creates credentials automatically:
 
 ```text
 username: admin
@@ -115,7 +98,7 @@ Credentials are stored mode `0600` under:
 
 They are reused on later installer runs.
 
-Display the login credentials locally on the laptop:
+Show credentials locally on the laptop:
 
 ```bash
 auto-agent credentials
@@ -127,68 +110,62 @@ Open the center locally:
 auto-agent center
 ```
 
-The login session is shared across the laptop IP, so the authenticated Hermes/OpenClaw proxy views do not request a second login.
-
-Repeated failed logins are rate-limited by the Control Center.
+The session cookie is host-scoped, so the authenticated native Hermes/OpenClaw proxy pages do not request a second login. Failed login attempts are rate-limited per originating client IP.
 
 ## Network/security architecture
 
-Hermes and OpenClaw remain loopback backends. They are not directly bound to the LAN.
+The agent backends remain loopback-only:
 
 ```text
 LAN Browser
     |
-    | one login
+    | login once
     v
-Laptop IP :8088
+Laptop :8088
 Auto Agent Control Center
     |
-    +-------------------------+
-    |                         |
-    v                         v
-Nginx authenticated proxy   Unified Chat Router
-    |                         |
-    +--> Hermes Dashboard     +--> @hermes --> hermes -z
-    |    127.0.0.1:9119       |
-    |                         +--> @openclaw --> OpenClaw /v1/chat/completions
-    +--> OpenClaw Control UI
-         127.0.0.1:18789
-              |
-              v
-        Ollama GPU gateway
-              |
-              v
-        NVIDIA GPU server
+    +--> Unified Chat Router
+    |      +--> @hermes   --> hermes -z
+    |      +--> @openclaw --> OpenClaw /v1/chat/completions
+    |
+    +--> authenticated native navigation
+           +--> Nginx :9120  --> Hermes 127.0.0.1:9119
+           +--> Nginx :18790 --> OpenClaw 127.0.0.1:18789
+                                      |
+                                      v
+                               Ollama GPU gateway
+                                      |
+                                      v
+                               NVIDIA GPU server
 ```
 
-OpenClaw is configured for a narrowly-scoped same-host trusted reverse proxy:
+Security boundaries:
 
-- Gateway stays `loopback`
-- trusted proxy is only `127.0.0.1`
-- proxy identity header is overwritten by Nginx
-- external browser access must pass Control Center login first
-- Chat Completions HTTP endpoint is enabled for the Unified Chat router
+- Hermes stays on `127.0.0.1:9119`.
+- OpenClaw stays on `127.0.0.1:18789`.
+- Nginx is the only browser-facing hop.
+- Nginx enforces the detected LAN CIDR even when UFW is disabled.
+- If UFW is already active, matching LAN-only rules are also added.
+- Nginx overwrites client-address and trusted identity headers rather than accepting browser-supplied values.
+- OpenClaw trusts only same-host proxy source `127.0.0.1` with explicit `allowLoopback`.
+- OpenClaw trusted-proxy configuration is applied atomically with `config patch` and validated before restart.
+- The verified proxy identity receives the operator scope required for the native Control UI; external clients cannot provide that identity directly because the Gateway is loopback-only.
+- Hermes requests are translated back to loopback Host/Origin at the backend rather than exposing its management server directly.
 
-Hermes Dashboard also remains on loopback and is exposed only through the authenticated Nginx hop.
-
-If UFW is already active, the installer adds LAN-subnet-only rules for the control ports. The installer does not silently enable UFW when it is disabled.
-
-> Current Control Center LAN access uses HTTP. Authentication prevents unauthenticated use, but HTTP does not protect credentials/session traffic against an attacker capable of sniffing or modifying the LAN. HTTPS/mTLS should be used for untrusted networks or cross-site deployment.
+> LAN access currently uses HTTP. Login prevents unauthenticated use, but HTTP does not protect credentials/session traffic from an attacker capable of sniffing or modifying that LAN. Use HTTPS/mTLS or a trusted overlay network for untrusted networks or cross-site access.
 
 ## Ports
 
-| Port | Purpose | Direct backend bind |
+| Port | Purpose | Listener/backend |
 |---|---|---|
-| `8088` | Unified Control Center | Nginx on laptop LAN IP |
-| `9119` | Hermes view behind shared login | Hermes backend stays `127.0.0.1` |
-| `18789` | OpenClaw view behind shared login | OpenClaw backend stays `127.0.0.1` |
-| `11434` | GPU inference gateway on GPU server | Ollama stays `127.0.0.1` behind server Nginx |
+| `8088` | Unified Control Center | Nginx LAN entry |
+| `9120` | Hermes native view behind shared login | Nginx → `127.0.0.1:9119` |
+| `18790` | OpenClaw native view behind shared login | Nginx → `127.0.0.1:18789` |
+| `9119` | Hermes Dashboard backend | loopback only |
+| `18789` | OpenClaw Gateway backend | loopback only |
+| `11434` | GPU inference gateway on GPU server | server Nginx → Ollama loopback |
 
-Users normally enter only:
-
-```text
-http://LAPTOP_IP:8088
-```
+Users normally need only port `8088`; the native-view ports are selected automatically by the common menu.
 
 ## Management commands
 
@@ -210,7 +187,7 @@ Laptop discovery order:
 4. `/auto-agent/discovery` subnet scan
 5. legacy `:11434` HTTP-401 fingerprint scan
 
-The inference API token is not published in mDNS or discovery metadata. It is transferred through the SSH trust channel.
+The inference API token is never published through mDNS or discovery metadata. It is transferred through the SSH trust channel.
 
 ## Normal deployment
 
@@ -226,4 +203,4 @@ Laptop:
 curl -fsSL https://raw.githubusercontent.com/caotiensinh/auto_agent/main/install.sh | bash
 ```
 
-Then from any PC on the same LAN, open the Control Center URL printed by the laptop installer and log in.
+Then open the URL printed by the laptop installer from any browser on the same LAN and log in.

@@ -216,14 +216,15 @@ const host=location.hostname;const hermesUrl=`http://${host}:__HERMES_PORT__/`;c
 function tab(name){if(name==='hermes'){location.href=hermesUrl;return}if(name==='openclaw'){location.href=openclawUrl;return}document.querySelectorAll('header button[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===name));if(name==='status')loadStatus();}
 document.querySelectorAll('header button[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 function add(cls,meta,text){const d=document.createElement('div');d.className='msg '+cls;d.innerHTML=`<div class="meta">${meta}</div>`;d.append(document.createTextNode(text));document.getElementById('messages').append(d);d.scrollIntoView();}
-async function send(){const input=document.getElementById('prompt');const message=input.value.trim();if(!message)return;input.value='';add('user','You',message);document.getElementById('send').disabled=true;try{const r=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message,mode:document.getElementById('mode').value,conversation_id:conv})});const d=await r.json();if(!r.ok)throw new Error(d.error||'request failed');add('agent',d.agent,d.answer);document.getElementById('mode').value=d.agent;}catch(e){add('agent','Error',String(e));}finally{document.getElementById('send').disabled=false;input.focus();}}
+async function jsonResponse(r){const text=await r.text();const ct=(r.headers.get('content-type')||'').toLowerCase();if(!ct.includes('application/json')){const preview=(text||'').replace(/\s+/g,' ').trim().slice(0,180);throw new Error(`HTTP ${r.status} ${r.statusText}: expected JSON, received ${ct||'unknown content-type'}${preview?` - ${preview}`:''}`);}let d;try{d=JSON.parse(text||'{}');}catch(e){throw new Error(`HTTP ${r.status}: malformed JSON response`);}if(!r.ok)throw new Error(d.error||`HTTP ${r.status} ${r.statusText}`);return d;}
+async function send(){const input=document.getElementById('prompt');const message=input.value.trim();if(!message)return;input.value='';add('user','You',message);document.getElementById('send').disabled=true;try{const r=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message,mode:document.getElementById('mode').value,conversation_id:conv})});const d=await jsonResponse(r);add('agent',d.agent,d.answer);document.getElementById('mode').value=d.agent;}catch(e){add('agent','Error',String(e));}finally{document.getElementById('send').disabled=false;input.focus();}}
 document.getElementById('send').onclick=send;document.getElementById('prompt').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
-async function loadStatus(){try{const r=await fetch('/api/status');const d=await r.json();document.getElementById('statusText').textContent=JSON.stringify(d,null,2);}catch(e){document.getElementById('statusText').textContent=String(e)}}
+async function loadStatus(){try{const r=await fetch('/api/status');const d=await jsonResponse(r);document.getElementById('statusText').textContent=JSON.stringify(d,null,2);}catch(e){document.getElementById('statusText').textContent=String(e)}}
 </script></body></html>"""
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "AutoAgentControl/0.3"
+    server_version = "AutoAgentControl/0.4"
 
     def log_message(self, fmt, *args):
         try:

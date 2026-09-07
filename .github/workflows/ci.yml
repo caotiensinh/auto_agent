@@ -127,8 +127,8 @@ jobs:
           grep -Fq 'HERMES_PUBLIC_HOST="${AUTO_AGENT_HERMES_PUBLIC_HOST:-hermes.${PUBLIC_DOMAIN}}"' scripts/unified_control_v2.sh
           grep -Fq 'OPENCLAW_PUBLIC_HOST="${AUTO_AGENT_OPENCLAW_PUBLIC_HOST:-openclaw.${PUBLIC_DOMAIN}}"' scripts/unified_control_v2.sh
           grep -Fq '$http_cf_connecting_ip' scripts/unified_control_v2.sh
-          grep -Fq 'proxy_set_header X-Forwarded-For $auto_agent_client_ip;' scripts/unified_control_v2.sh
-          grep -Fq 'proxy_set_header X-Real-IP $auto_agent_client_ip;' scripts/unified_control_v2.sh
+          grep -Fq 'proxy_set_header X-Forwarded-For \$auto_agent_client_ip;' scripts/unified_control_v2.sh
+          grep -Fq 'proxy_set_header X-Real-IP \$auto_agent_client_ip;' scripts/unified_control_v2.sh
           grep -Fq 'X-Auto-Agent-SSO-Boundary 1' scripts/unified_control_v2.sh
           grep -Fq 'X-Auto-Agent-SSO-Target hermes' scripts/unified_control_v2.sh
           grep -Fq 'X-Auto-Agent-SSO-Target openclaw' scripts/unified_control_v2.sh

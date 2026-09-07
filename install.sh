@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-AUTO_AGENT_BOOTSTRAP_VERSION="0.5.3"
+AUTO_AGENT_BOOTSTRAP_VERSION="0.5.4"
 REPO_RAW="${AUTO_AGENT_REPO_RAW:-https://raw.githubusercontent.com/caotiensinh/auto_agent/main}"
 ROLE="${ROLE:-auto}"
 
@@ -95,10 +95,12 @@ printf '============================================================\n\n'
 TMP="$(mktemp)"
 SVC_TMP=""
 UNIFIED_TMP=""
+SSO_TMP=""
 cleanup(){
   rm -f "$TMP"
   [[ -z "$SVC_TMP" ]] || rm -f "$SVC_TMP"
   [[ -z "$UNIFIED_TMP" ]] || rm -f "$UNIFIED_TMP"
+  [[ -z "$SSO_TMP" ]] || rm -f "$SSO_TMP"
 }
 trap cleanup EXIT
 
@@ -125,4 +127,9 @@ UNIFIED_TMP="$(mktemp)"
 log "CLIENT PHASE 3/3 — authenticated unified LAN Control Center"
 download_component scripts/unified_control.sh "$UNIFIED_TMP" 'AUTO_AGENT_COMPONENT=unified-control'
 run_bash_component "$UNIFIED_TMP"
+
+SSO_TMP="$(mktemp)"
+log "CLIENT PHASE 3/3 — OpenClaw single-login SSO finalization"
+download_component scripts/openclaw_sso.sh "$SSO_TMP" 'AUTO_AGENT_COMPONENT=openclaw-sso'
+run_bash_component "$SSO_TMP"
 ok "CLIENT PHASE 3/3 completed"

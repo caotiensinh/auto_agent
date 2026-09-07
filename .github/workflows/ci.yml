@@ -15,7 +15,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Bash syntax check
+      - name: Syntax checks
         shell: bash
         run: |
           set -euo pipefail
@@ -23,6 +23,8 @@ jobs:
           bash -n scripts/server.sh
           bash -n scripts/client.sh
           bash -n scripts/client_services.sh
+          bash -n scripts/unified_control.sh
+          python3 -m py_compile scripts/control_center.py
 
       - name: Inventory-first and reuse contracts
         shell: bash
@@ -63,10 +65,9 @@ jobs:
           grep -q 'AUTO_AGENT_COMPONENT=server' scripts/server.sh
           grep -q 'AUTO_AGENT_COMPONENT=client' scripts/client.sh
           grep -q 'AUTO_AGENT_COMPONENT=client-services' scripts/client_services.sh
+          grep -q 'AUTO_AGENT_COMPONENT=unified-control' scripts/unified_control.sh
           grep -q 'OLLAMA_HOST=127.0.0.1:11434' scripts/server.sh
           grep -q '_local-ai._tcp' scripts/server.sh
-          grep -q '_local-ai._tcp' scripts/client.sh
-          grep -q '/auto-agent/discovery' scripts/server.sh
           grep -q '/auto-agent/discovery' scripts/client.sh
           grep -q 'scan_new' scripts/client.sh
           grep -q 'scan_legacy' scripts/client.sh
@@ -80,6 +81,9 @@ jobs:
           grep -q 'openclaw.ai/install.sh' scripts/client.sh
           grep -q 'models.providers.ollama.baseUrl' scripts/client.sh
           grep -q 'config set tools.profile messaging' scripts/client.sh
+          grep -q 'gateway.http.endpoints.chatCompletions.enabled true' scripts/unified_control.sh
+          grep -q 'hermes.*-z' scripts/control_center.py
+          grep -q 'openclaw/default' scripts/control_center.py
 
       - name: End-to-end readiness contracts
         shell: bash
@@ -88,26 +92,27 @@ jobs:
           grep -q 'verify_remote_inference' scripts/client.sh
           grep -q '/chat/completions' scripts/client.sh
           grep -q 'Hermes configuration verified' scripts/client.sh
-          grep -q 'gateway status --json' scripts/client.sh
-          grep -q 'gateway install --force' scripts/client.sh
-          grep -q 'gateway start' scripts/client.sh
           grep -q 'OpenClaw Gateway installed/running/reachable' scripts/client.sh
-          grep -q 'refusing READY state' scripts/client.sh
+          grep -q 'scripts/client_services.sh' install.sh
+          grep -q 'scripts/unified_control.sh' install.sh
 
-      - name: Boot persistence and control contracts
+      - name: Boot persistence and unified control contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'scripts/client_services.sh' install.sh
           grep -q 'loginctl enable-linger' scripts/client_services.sh
           grep -q 'gateway install --start-now --start-on-login' scripts/client_services.sh
-          grep -q 'hermes-gateway.service' scripts/client_services.sh
           grep -q 'auto-agent-hermes-dashboard.service' scripts/client_services.sh
-          grep -q 'dashboard --host' scripts/client_services.sh
-          grep -q 'gateway.bind lan' scripts/client_services.sh
-          grep -q 'gateway.auth.mode token' scripts/client_services.sh
-          grep -q 'Management CLI installed' scripts/client_services.sh
-          grep -q 'auto-agent status' scripts/client_services.sh
+          grep -q 'listen ${LAPTOP_IP}:${CENTER_PORT}' scripts/unified_control.sh
+          grep -q 'auth_request /_auth' scripts/unified_control.sh
+          grep -q 'gateway.bind loopback' scripts/unified_control.sh
+          grep -q 'gateway.auth.mode trusted-proxy' scripts/unified_control.sh
+          grep -q 'gateway.trustedProxies' scripts/unified_control.sh
+          grep -q 'AUTO_AGENT_CONTROL_PASSWORD' scripts/unified_control.sh
+          grep -q '@hermes' scripts/control_center.py
+          grep -q '@openclaw' scripts/control_center.py
+          grep -q 'LOGIN_MAX_ATTEMPTS' scripts/control_center.py
+          grep -q 'AUTO_AGENT UNIFIED CONTROL CENTER READY' scripts/unified_control.sh
 
       - name: Ensure no hard-coded API token
         shell: bash

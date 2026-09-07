@@ -69,6 +69,19 @@ jobs:
           grep -q 'models.providers.ollama.baseUrl' scripts/client.sh
           grep -q 'config set tools.profile messaging' scripts/client.sh
 
+      - name: End-to-end readiness contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'verify_remote_inference' scripts/client.sh
+          grep -q '/chat/completions' scripts/client.sh
+          grep -q 'Hermes configuration verified' scripts/client.sh
+          grep -q 'gateway status --json' scripts/client.sh
+          grep -q 'gateway install --force' scripts/client.sh
+          grep -q 'gateway start' scripts/client.sh
+          grep -q 'OpenClaw Gateway installed/running/reachable' scripts/client.sh
+          grep -q 'refusing READY state' scripts/client.sh
+
       - name: Ensure no hard-coded API token
         shell: bash
         run: |

@@ -47,13 +47,6 @@
     return {row, meta, text};
   }
 
-  function failPending(pending, error) {
-    pending.row.className = 'msg-row error';
-    pending.avatar && (pending.avatar.textContent = '!');
-    pending.meta.textContent = 'Error';
-    pending.text.textContent = String(error);
-  }
-
   function setBusy(value) {
     busy = value;
     send.disabled = value;
@@ -76,17 +69,55 @@
     row.scrollIntoView({behavior:'smooth', block:'end'});
   }
 
+  function formatDuration(seconds) {
+    seconds = Math.max(0, Math.floor(Number(seconds || 0)));
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remSeconds = seconds % 60;
+    if (minutes < 60) return remSeconds ? `${minutes}m ${remSeconds}s` : `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    const remMinutes = minutes % 60;
+    return remMinutes ? `${hours}h ${remMinutes}m` : `${hours}h`;
+  }
+
+  function policyLabel(policy) {
+    if (!policy) return '';
+    const hard = policy.hard_limit_seconds;
+    if (hard == null) return 'agent runtime: no hard cap';
+    return `agent runtime: ${formatDuration(hard)} max`;
+  }
+
   async function sleep(ms) {
     await new Promise(resolve => setTimeout(resolve, ms));
   }
 
   async function pollJob(job, pending) {
-    const deadline = Date.now() + 15 * 60 * 1000;
     let delay = Math.max(500, Number(job.retry_after_ms || 800));
-    while (Date.now() < deadline) {
+    let transientFailures = 0;
+    const pollHeaders = {'accept':'application/json'};
+    if (job.poll_token) pollHeaders['X-Auto-Agent-Job-Token'] = job.poll_token;
+
+    // There is deliberately NO Auto Agent wall-clock deadline here. The
+    // selected agent owns its runtime policy; the server reports completion or
+    // the agent's own configured timeout. This avoids imposing a shorter
+    // browser limit than Hermes/OpenClaw.
+    for (;;) {
       await sleep(delay);
-      const r = await fetch(job.poll_url, {cache:'no-store', headers:{'accept':'application/json'}});
-      const data = await parseJsonResponse(r);
+      let data;
+      try {
+        const r = await fetch(job.poll_url, {cache:'no-store', headers:pollHeaders});
+        data = await parseJsonResponse(r);
+        transientFailures = 0;
+      } catch (error) {
+        transientFailures += 1;
+        if (transientFailures >= 8) throw error;
+        pending.meta.textContent = `${job.agent || 'Auto Agent'} · reconnecting`;
+        pending.text.textContent = `Temporary polling error. Retrying (${transientFailures}/8)…`;
+        delay = Math.min(10000, Math.max(1500, delay * 1.8));
+        continue;
+      }
+
+      const policy = data.runtime_policy || job.runtime_policy || {};
       if (data.status === 'done') {
         pending.meta.textContent = data.agent || job.agent || 'Auto Agent';
         pending.text.textContent = data.answer || '';
@@ -100,12 +131,13 @@
         pending.text.textContent = data.error || 'Agent execution failed';
         return;
       }
-      const elapsed = Number(data.elapsed_ms || 0);
+
+      const elapsed = Number(data.elapsed_ms || 0) / 1000;
+      const policyText = policyLabel(policy);
       pending.meta.textContent = `${data.agent || job.agent || 'Auto Agent'} · working`;
-      pending.text.textContent = elapsed >= 1000 ? `Thinking… ${Math.floor(elapsed / 1000)}s` : 'Thinking…';
-      delay = Math.min(2500, Math.max(800, Number(data.retry_after_ms || 1200)));
+      pending.text.textContent = `Thinking… ${formatDuration(elapsed)}${policyText ? ` · ${policyText}` : ''}`;
+      delay = Math.min(3000, Math.max(800, Number(data.retry_after_ms || 1200)));
     }
-    throw new Error('Agent task exceeded the 15 minute client wait limit.');
   }
 
   async function asyncSend() {
@@ -127,7 +159,9 @@
       });
       const job = await parseJsonResponse(r);
       if (!job.job_id || !job.poll_url) throw new Error('Async chat submission returned no job id.');
+      const label = policyLabel(job.runtime_policy);
       pending.meta.textContent = `${job.agent || 'Auto Agent'} · queued`;
+      pending.text.textContent = label ? `Queued · ${label}` : 'Queued…';
       await pollJob(job, pending);
     } catch (error) {
       pending.row.className = 'msg-row error';
@@ -138,10 +172,8 @@
     }
   }
 
-  // Replace the old synchronous button handler.
   send.onclick = asyncSend;
 
-  // Capture Enter before the old synchronous key handler can run.
   prompt.addEventListener('keydown', event => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();

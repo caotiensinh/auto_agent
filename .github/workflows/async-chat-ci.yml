@@ -1,0 +1,77 @@
+name: Async Chat CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  async-chat-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/ui_upgrade.sh
+          python3 -m py_compile scripts/control_center_v2.py scripts/control_center_v4.py
+          node --check scripts/control_center_async.js
+
+      - name: Async request contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'ThreadPoolExecutor(max_workers=2' scripts/control_center_v4.py
+          grep -Fq '"/api/chat/jobs/"' scripts/control_center_v4.py
+          grep -Fq 'self.send_json(202' scripts/control_center_v4.py
+          grep -Fq 'EXECUTOR.submit(run_job' scripts/control_center_v4.py
+          grep -Fq 'pollJob' scripts/control_center_async.js
+          grep -Fq "fetch('/api/chat'" scripts/control_center_async.js
+          grep -Fq "fetch(job.poll_url" scripts/control_center_async.js
+          grep -Fq 'stopImmediatePropagation' scripts/control_center_async.js
+          grep -Fq 'Cloudflare-safe async chat submit + polling installed' scripts/ui_upgrade.sh
+          grep -Fq 'control_center_v4.py' scripts/ui_upgrade.sh
+          grep -Fq 'control_center_async.js' scripts/ui_upgrade.sh
+
+      - name: Job lifecycle unit test
+        shell: bash
+        env:
+          AUTO_AGENT_APP_DIR: ${{ github.workspace }}/scripts
+          AUTO_AGENT_CONTROL_PASSWORD: test-password
+          AUTO_AGENT_SESSION_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          OPENCLAW_LOCAL_PASSWORD: local-password
+          AUTO_AGENT_PUBLIC_DOMAIN: example.com
+          AUTO_AGENT_CENTER_PUBLIC_HOST: workspace.example.com
+          AUTO_AGENT_HERMES_PUBLIC_HOST: hermes.example.com
+          AUTO_AGENT_OPENCLAW_PUBLIC_HOST: openclaw.example.com
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util
+          import time
+          spec = importlib.util.spec_from_file_location('cc4', 'scripts/control_center_v4.py')
+          m = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+          assert m.ASYNC_ASSET_PATH == '/_auto_agent_async.js'
+          assert '/_auto_agent_async.js' in m.backend.APP_HTML
+          m.backend.run_hermes = lambda message: 'ok:' + message
+          job_id = 'unit-job'
+          with m.JOB_LOCK:
+              m.JOBS[job_id] = {
+                  'status': 'queued',
+                  'agent': 'hermes',
+                  'conversation_id': 'conv',
+                  'created_at': time.time(),
+              }
+          m.run_job(job_id, 'hermes', 'network diagnostics', 'conv', '127.0.0.1')
+          with m.JOB_LOCK:
+              job = dict(m.JOBS[job_id])
+          assert job['status'] == 'done', job
+          assert job['answer'] == 'ok:network diagnostics', job
+          PY

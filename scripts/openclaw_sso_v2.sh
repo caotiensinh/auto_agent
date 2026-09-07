@@ -77,13 +77,14 @@ source "$ENV_FILE"
 : "${OPENCLAW_LOCAL_PASSWORD:?OPENCLAW_LOCAL_PASSWORD missing}"
 
 sudo grep -Fq 'X-Auto-Agent-SSO-Boundary 1' "$NGINX_CONFIG" || die "Signed public SSO callback boundary missing"
+sudo grep -Fq 'proxy_set_header Cookie $http_cookie;' "$NGINX_CONFIG" || die "Native SSO bridge cookie forwarding missing"
 sudo grep -Fq 'proxy_set_header X-Forwarded-For $auto_agent_client_ip;' "$NGINX_CONFIG" || die "Safe forwarded-client overwrite missing"
 sudo grep -Fq 'proxy_set_header X-Forwarded-User' "$NGINX_CONFIG" || die "Trusted identity overwrite missing"
 sudo grep -Fq "proxy_pass http://127.0.0.1:${OPENCLAW_BACKEND_PORT};" "$NGINX_CONFIG" || die "OpenClaw backend must remain loopback-only"
 if sudo grep -Fqi 'Cf-Access-Jwt-Assertion' "$NGINX_CONFIG"; then
   die "Insecure Cloudflare-header authentication regression detected"
 fi
-ok "Nginx signed-SSO + attribution boundary verified"
+ok "Nginx resilient SSO bridge + attribution boundary verified"
 
 python3 - "$OPENCLAW_LOCAL_PASSWORD" "$LAPTOP_IP" "$OPENCLAW_PUBLIC_PORT" "$AUTO_AGENT_PROXY_IDENTITY" "$OPENCLAW_PUBLIC_HOST" <<'PY' | "$OPENCLAW" config patch --stdin >/dev/null
 import json, sys
@@ -128,7 +129,7 @@ print(json.dumps({
 }))
 PY
 
-"$OPENCLAW" config validate >/dev/null || die "OpenClaw v0.5.8 config validation failed"
+"$OPENCLAW" config validate >/dev/null || die "OpenClaw v0.5.9 config validation failed"
 
 python3 - "$OPENCLAW_CONFIG" "$AUTO_AGENT_PROXY_IDENTITY" "$LAPTOP_IP" "$OPENCLAW_PUBLIC_PORT" "$OPENCLAW_PUBLIC_HOST" <<'PY'
 import json, pathlib, sys
@@ -187,10 +188,11 @@ if [[ "$ROTATE_CONTROL_SECRETS" == 1 ]]; then
 fi
 
 printf '\n============================================================\n'
-printf 'AUTO_AGENT OPENCLAW SINGLE-LOGIN v0.5.8 READY\n'
+printf 'AUTO_AGENT OPENCLAW SINGLE-LOGIN v0.5.9 READY\n'
 printf 'Human login       : Cloudflare Access + Auto Agent Workspace login\n'
-printf 'Native handoff    : signed one-time POST, replay-protected, 30s TTL\n'
-printf 'Native cookie     : host-only Secure session, 15m TTL with auto-renew\n'
+printf 'Native handoff    : temporary Secure bridge cookie + GET, replay-protected, 180s TTL\n'
+printf 'Access challenge  : one automatic handoff retry after first native Cloudflare challenge\n'
+printf 'Native cookie     : host-only Secure session, 15m TTL with Workspace renewal\n'
 printf 'Forwarded client  : Nginx-overwritten LAN peer / Cloudflare client IP\n'
 printf 'Gateway secrets   : server-side only; never injected into browser\n'
 printf 'Proxy identity    : allowlisted + header-overwritten\n'

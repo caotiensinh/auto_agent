@@ -23,7 +23,29 @@ jobs:
           bash -n scripts/server.sh
           bash -n scripts/client.sh
 
-      - name: Deployment contract checks
+      - name: Inventory-first and reuse contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'SERVER PRE-FLIGHT INVENTORY (NO CHANGES YET)' scripts/server.sh
+          grep -q 'CLIENT PRE-FLIGHT INVENTORY (NO CHANGES YET)' scripts/client.sh
+          grep -q 'install ONLY missing packages/components' scripts/server.sh
+          grep -q 'Model already installed; download skipped' scripts/server.sh
+          grep -q 'Hermes exists; installer skipped' scripts/client.sh
+          grep -q 'OpenClaw exists; installer skipped' scripts/client.sh
+
+      - name: GPU and model inspection contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'nvidia-smi --query-gpu=index,name,driver_version,memory.total,pci.bus_id' scripts/server.sh
+          grep -q 'ollama list' scripts/server.sh
+          grep -q '/api/show' scripts/server.sh
+          grep -q 'capabilities' scripts/server.sh
+          grep -q 'MIN_AGENT_CONTEXT' scripts/server.sh
+          grep -q 'UPDATE_OLLAMA' scripts/server.sh
+
+      - name: Secure deployment and discovery contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -32,10 +54,20 @@ jobs:
           grep -q 'OLLAMA_HOST=127.0.0.1:11434' scripts/server.sh
           grep -q '_local-ai._tcp' scripts/server.sh
           grep -q '_local-ai._tcp' scripts/client.sh
+          grep -q '/auto-agent/discovery' scripts/server.sh
+          grep -q '/auto-agent/discovery' scripts/client.sh
+          grep -q 'scan_new' scripts/client.sh
+          grep -q 'scan_legacy' scripts/client.sh
+          grep -q 'SSH_TARGET="${SSH_USER}@${SERVER_IP}"' scripts/client.sh
+
+      - name: Agent integration contracts
+        shell: bash
+        run: |
+          set -euo pipefail
           grep -q 'hermes-agent.nousresearch.com/install.sh' scripts/client.sh
           grep -q 'openclaw.ai/install.sh' scripts/client.sh
           grep -q 'models.providers.ollama.baseUrl' scripts/client.sh
-          grep -q 'tools.profile "messaging"' scripts/client.sh
+          grep -q 'config set tools.profile messaging' scripts/client.sh
 
       - name: Ensure no hard-coded API token
         shell: bash

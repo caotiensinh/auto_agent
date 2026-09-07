@@ -7,6 +7,7 @@ HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 UPDATE_HERMES="${UPDATE_HERMES:-0}"
 UPDATE_OPENCLAW="${UPDATE_OPENCLAW:-0}"
 PORT="${GATEWAY_PORT:-11434}"
+OPENCLAW_GATEWAY_PORT="${OPENCLAW_GATEWAY_PORT:-18789}"
 
 log(){ printf '\033[1;34m[CLIENT]\033[0m %s\n' "$*"; }
 ok(){ printf '\033[1;32m[CLIENT:OK]\033[0m %s\n' "$*"; }
@@ -74,7 +75,7 @@ preflight(){
     printf 'Cached server   : none\n'
   fi
   printf 'Install policy  : reuse existing agents; install ONLY missing components\n'
-  printf 'READY policy    : remote inference + Hermes config + OpenClaw gateway health must PASS\n'
+  printf 'READY policy    : remote inference + Hermes config + OpenClaw /startupz must PASS\n'
   printf '============================================================\n\n'
 }
 
@@ -343,24 +344,29 @@ gateway_field(){
 import json,sys
 try:
     d=json.loads(sys.argv[1]); key=sys.argv[2]
-    svc=d.get("service") or {}; rpc=d.get("rpc") or {}
-    runtime=svc.get("runtime") or {}
-    installed=bool(svc.get("command") is not None or svc.get("loaded"))
-    running=runtime.get("status")=="running"
-    reachable=bool(rpc.get("ok"))
-    vals={"installed":installed,"running":running,"reachable":reachable}
-    print("1" if vals[key] else "0")
+    svc=d.get("service") or {}; runtime=svc.get("runtime") or {}
+    vals={
+        "installed": bool(svc.get("command") is not None or svc.get("loaded")),
+        "running": runtime.get("status")=="running",
+    }
+    print("1" if vals.get(key, False) else "0")
 except Exception:
     print("0")
 PY
 }
 
+openclaw_startup_probe(){
+  curl -fsS --connect-timeout 2 --max-time 3 \
+    "http://127.0.0.1:${OPENCLAW_GATEWAY_PORT}/startupz" \
+    | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d.get("ok") is True and d.get("status")=="started"' \
+    >/dev/null 2>&1
+}
+
 ensure_openclaw_gateway(){
-  local st installed running reachable i
+  local st installed running i
   st="$(gateway_status_json)"
   installed="$(gateway_field "$st" installed)"
   running="$(gateway_field "$st" running)"
-  reachable="$(gateway_field "$st" reachable)"
 
   if [[ "$installed" != 1 ]]; then
     log "OpenClaw Gateway service missing; installing only this missing component..."
@@ -369,24 +375,24 @@ ensure_openclaw_gateway(){
 
   st="$(gateway_status_json)"
   running="$(gateway_field "$st" running)"
-  reachable="$(gateway_field "$st" reachable)"
   if [[ "$running" != 1 ]]; then
     log "OpenClaw Gateway service not running; starting it..."
     "$OPENCLAW" gateway start >/dev/null || die "OpenClaw gateway start failed"
   fi
 
-  for i in $(seq 1 20); do
+  for i in $(seq 1 30); do
     st="$(gateway_status_json)"
-    reachable="$(gateway_field "$st" reachable)"
-    [[ "$reachable" == 1 ]] && break
+    running="$(gateway_field "$st" running)"
+    if [[ "$running" == 1 ]] && openclaw_startup_probe; then
+      ok "OpenClaw Gateway service running; HTTP /startupz=started"
+      return 0
+    fi
     sleep 1
   done
 
-  [[ "$reachable" == 1 ]] || {
-    "$OPENCLAW" gateway status || true
-    die "OpenClaw gateway service is not reachable; refusing READY state"
-  }
-  ok "OpenClaw Gateway installed/running/reachable"
+  "$OPENCLAW" gateway status || true
+  curl -sS --max-time 3 "http://127.0.0.1:${OPENCLAW_GATEWAY_PORT}/startupz" || true
+  die "OpenClaw gateway failed service/startup HTTP readiness"
 }
 
 ensure_claw(){
@@ -435,5 +441,5 @@ printf 'GPU server: %s:%s\n' "$SERVER_IP" "$SERVER_PORT"
 printf 'Model     : %s\n' "$MODEL"
 printf 'Hermes    : %s\n' "$HERMES"
 printf 'OpenClaw  : %s\n' "$OPENCLAW"
-printf 'Gateway   : installed + running + reachable\n'
+printf 'Gateway   : installed + running + /startupz=started\n'
 printf '============================================================\n'

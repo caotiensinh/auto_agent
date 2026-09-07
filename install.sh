@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-AUTO_AGENT_BOOTSTRAP_VERSION="0.5.1"
+AUTO_AGENT_BOOTSTRAP_VERSION="0.5.2"
 REPO_RAW="${AUTO_AGENT_REPO_RAW:-https://raw.githubusercontent.com/caotiensinh/auto_agent/main}"
 ROLE="${ROLE:-auto}"
 
@@ -61,17 +61,33 @@ download_component(){
   chmod 0700 "$out"
 }
 
+# IMPORTANT: when install.sh itself is executed as `curl ... | bash`, stdin is the
+# source-code pipe. A child program that reads stdin can otherwise consume the
+# unread remainder of this bootstrap and make phase 2/3 disappear. Components
+# therefore receive the controlling terminal (or /dev/null when no tty exists),
+# never the bootstrap source stream.
+run_bash_component(){
+  local file="$1"; shift
+  if [[ -r /dev/tty ]]; then
+    env "$@" bash "$file" </dev/tty
+  else
+    env "$@" bash "$file" </dev/null
+  fi
+}
+
 case "$ROLE" in
   auto) if has_nvidia; then ROLE=server; else ROLE=client; fi ;;
   server|client) ;;
   *) die "ROLE must be auto, server, or client" ;;
 esac
 
+if [[ -t 0 ]]; then BOOTSTRAP_INPUT="terminal"; else BOOTSTRAP_INPUT="stream-isolated"; fi
 printf '\n============================================================\n'
 printf 'AUTO_AGENT BOOTSTRAP\n'
 printf 'Version : %s\n' "$AUTO_AGENT_BOOTSTRAP_VERSION"
 printf 'Ubuntu  : %s\n' "${PRETTY_NAME:-$VERSION_ID}"
 printf 'Role    : %s\n' "$ROLE"
+printf 'Input   : %s\n' "$BOOTSTRAP_INPUT"
 printf '============================================================\n\n'
 
 [[ "$ROLE" == client ]] && prepare_client_runtime_path
@@ -89,22 +105,24 @@ trap cleanup EXIT
 if [[ "$ROLE" == server ]]; then
   log "SERVER PHASE — inventory/reuse/configure/verify"
   download_component scripts/server.sh "$TMP" 'AUTO_AGENT_COMPONENT=server'
-  exec bash "$TMP"
+  run_bash_component "$TMP"
+  exit 0
 fi
 
 log "CLIENT PHASE 1/3 — agent + GPU connectivity reconciliation"
 download_component scripts/client.sh "$TMP" 'AUTO_AGENT_COMPONENT=client'
-bash "$TMP"
+run_bash_component "$TMP"
 ok "CLIENT PHASE 1/3 completed"
 prepare_client_runtime_path
 
 SVC_TMP="$(mktemp)"
 log "CLIENT PHASE 2/3 — boot persistence + loopback agent services"
 download_component scripts/client_services.sh "$SVC_TMP" 'AUTO_AGENT_COMPONENT=client-services'
-LAN_CONTROL=0 bash "$SVC_TMP"
+run_bash_component "$SVC_TMP" LAN_CONTROL=0
 ok "CLIENT PHASE 2/3 completed"
 
 UNIFIED_TMP="$(mktemp)"
 log "CLIENT PHASE 3/3 — authenticated unified LAN Control Center"
 download_component scripts/unified_control.sh "$UNIFIED_TMP" 'AUTO_AGENT_COMPONENT=unified-control'
-exec bash "$UNIFIED_TMP"
+run_bash_component "$UNIFIED_TMP"
+ok "CLIENT PHASE 3/3 completed"

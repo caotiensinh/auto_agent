@@ -73,7 +73,10 @@ source "$ENV_FILE"
 ok "Single-login credentials ready; existing values reused"
 
 tmp="$(mktemp)"
-curl -fsSL --proto '=https' --tlsv1.2 "${REPO_RAW}/scripts/control_center.py" -o "$tmp"
+bust="$(date +%s%N 2>/dev/null || date +%s)"
+curl -fsSL --proto '=https' --tlsv1.2 \
+  -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+  "${REPO_RAW}/scripts/control_center.py?auto_agent_cache_bust=${bust}" -o "$tmp"
 python3 -m py_compile "$tmp" || die "control_center.py syntax invalid"
 if ! cmp -s "$tmp" "$APP_FILE" 2>/dev/null; then
   install -m 700 "$tmp" "$APP_FILE"
@@ -154,13 +157,27 @@ WantedBy=default.target
 EOF2
 chmod 600 "$unit_path"
 systemctl --user daemon-reload
-systemctl --user enable --now "$UNIT" >/dev/null
+systemctl --user enable "$UNIT" >/dev/null
+# Always restart here: enable --now does not reload a Python process that is
+# already active, so an updated control_center.py would otherwise stay stale.
+systemctl --user restart "$UNIT" || die "Control Center service restart failed"
 
+backend_ok=0
 for _ in $(seq 1 30); do
-  curl -fsS --max-time 2 "http://127.0.0.1:${CENTER_INTERNAL_PORT}/login" >/dev/null 2>&1 && break
+  if curl -fsS --max-time 2 "http://127.0.0.1:${CENTER_INTERNAL_PORT}/login" >/dev/null 2>&1; then
+    backend_ok=1
+    break
+  fi
   sleep 1
 done
-curl -fsS --max-time 3 "http://127.0.0.1:${CENTER_INTERNAL_PORT}/login" >/dev/null || die "Control Center backend failed"
+if [[ "$backend_ok" != 1 ]]; then
+  warn "Control Center backend did not pass /login health; collecting service evidence"
+  systemctl --user status "$UNIT" --no-pager || true
+  journalctl --user -u "$UNIT" -n 80 --no-pager || true
+  curl -v --max-time 3 "http://127.0.0.1:${CENTER_INTERNAL_PORT}/login" || true
+  die "Control Center backend failed"
+fi
+ok "Control Center backend reachable on 127.0.0.1:${CENTER_INTERNAL_PORT}"
 
 NAV='<div id="auto-agent-nav" style="position:fixed;top:8px;right:8px;z-index:2147483647;background:#111827;color:#fff;padding:8px 10px;border-radius:9px;font:13px sans-serif;box-shadow:0 4px 18px #0008"><a style="color:#fff;text-decoration:none;margin-right:10px" href="http://'"$LAPTOP_IP"':'"$CENTER_PORT"'/">Auto Agent</a><a style="color:#fff;text-decoration:none;margin-right:10px" href="http://'"$LAPTOP_IP"':'"$HERMES_PUBLIC_PORT"'/">Hermes</a><a style="color:#fff;text-decoration:none" href="http://'"$LAPTOP_IP"':'"$OPENCLAW_PUBLIC_PORT"'/">OpenClaw</a></div>'
 

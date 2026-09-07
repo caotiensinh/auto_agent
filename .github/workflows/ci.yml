@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shell-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Bash syntax check
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n install.sh
+          bash -n scripts/server.sh
+          bash -n scripts/client.sh
+
+      - name: Deployment contract checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'AUTO_AGENT_COMPONENT=server' scripts/server.sh
+          grep -q 'AUTO_AGENT_COMPONENT=client' scripts/client.sh
+          grep -q 'OLLAMA_HOST=127.0.0.1:11434' scripts/server.sh
+          grep -q '_local-ai._tcp' scripts/server.sh
+          grep -q '_local-ai._tcp' scripts/client.sh
+          grep -q 'hermes-agent.nousresearch.com/install.sh' scripts/client.sh
+          grep -q 'openclaw.ai/install.sh' scripts/client.sh
+          grep -q 'models.providers.ollama.baseUrl' scripts/client.sh
+          grep -q 'tools.profile "messaging"' scripts/client.sh
+
+      - name: Ensure no hard-coded API token
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -RInE 'API_TOKEN=[A-Fa-f0-9]{64}' . --exclude-dir=.git

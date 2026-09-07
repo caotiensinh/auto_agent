@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION=' install.sh
+          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.5.2"' install.sh
           grep -q 'Cache-Control: no-cache' install.sh
           grep -q 'auto_agent_cache_bust=' install.sh
           grep -q 'CLIENT PHASE 1/3' install.sh
@@ -38,6 +38,19 @@ jobs:
           grep -q 'CLIENT PHASE 3/3' install.sh
           grep -q 'scripts/client_services.sh' install.sh
           grep -q 'scripts/unified_control.sh' install.sh
+
+      - name: Bootstrap stdin isolation contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'run_bash_component' install.sh
+          grep -q '</dev/tty' install.sh
+          grep -q '</dev/null' install.sh
+          grep -q 'stream-isolated' install.sh
+          grep -Fq 'run_bash_component "$TMP"' install.sh
+          grep -Fq 'run_bash_component "$SVC_TMP" LAN_CONTROL=0' install.sh
+          grep -Fq 'run_bash_component "$UNIFIED_TMP"' install.sh
+          ! grep -q '^ *exec bash ' install.sh
 
       - name: Inventory-first and reuse contracts
         shell: bash
@@ -120,7 +133,7 @@ jobs:
           grep -q '/chat/completions' scripts/client.sh
           grep -q 'Hermes configuration verified' scripts/client.sh
           grep -q 'OpenClaw Gateway service running; HTTP /startupz=started' scripts/client.sh
-          grep -q 'LAN_CONTROL=0 bash' install.sh
+          grep -Fq 'run_bash_component "$SVC_TMP" LAN_CONTROL=0' install.sh
 
       - name: Boot persistence and unified control contracts
         shell: bash

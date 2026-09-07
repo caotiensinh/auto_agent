@@ -24,13 +24,14 @@ jobs:
           bash -n scripts/client.sh
           bash -n scripts/client_services.sh
           bash -n scripts/unified_control.sh
+          bash -n scripts/openclaw_sso.sh
           python3 -m py_compile scripts/control_center.py
 
       - name: Bootstrap freshness and phase contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.5.3"' install.sh
+          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.5.4"' install.sh
           grep -q 'Cache-Control: no-cache' install.sh
           grep -q 'auto_agent_cache_bust=' install.sh
           grep -q 'CLIENT PHASE 1/3' install.sh
@@ -38,6 +39,8 @@ jobs:
           grep -q 'CLIENT PHASE 3/3' install.sh
           grep -q 'scripts/client_services.sh' install.sh
           grep -q 'scripts/unified_control.sh' install.sh
+          grep -q 'scripts/openclaw_sso.sh' install.sh
+          grep -q 'OpenClaw single-login SSO finalization' install.sh
 
       - name: Bootstrap stdin isolation contracts
         shell: bash
@@ -50,6 +53,7 @@ jobs:
           grep -Fq 'run_bash_component "$TMP"' install.sh
           grep -Fq 'run_bash_component "$SVC_TMP" LAN_CONTROL=0' install.sh
           grep -Fq 'run_bash_component "$UNIFIED_TMP"' install.sh
+          grep -Fq 'run_bash_component "$SSO_TMP"' install.sh
           ! grep -q '^ *exec bash ' install.sh
 
       - name: Inventory-first and reuse contracts
@@ -92,6 +96,7 @@ jobs:
           grep -q 'AUTO_AGENT_COMPONENT=client' scripts/client.sh
           grep -q 'AUTO_AGENT_COMPONENT=client-services' scripts/client_services.sh
           grep -q 'AUTO_AGENT_COMPONENT=unified-control' scripts/unified_control.sh
+          grep -q 'AUTO_AGENT_COMPONENT=openclaw-sso' scripts/openclaw_sso.sh
           grep -q 'OLLAMA_HOST=127.0.0.1:11434' scripts/server.sh
           grep -q '_local-ai._tcp' scripts/server.sh
           grep -q '/auto-agent/discovery' scripts/client.sh
@@ -147,6 +152,25 @@ jobs:
           grep -Fq 'systemctl --user restart "$UNIT"' scripts/unified_control.sh
           grep -q 'Control Center backend reachable' scripts/unified_control.sh
           grep -q 'journalctl --user -u "$UNIT" -n 80' scripts/unified_control.sh
+
+      - name: OpenClaw single-login SSO contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"mode": "trusted-proxy"' scripts/openclaw_sso.sh
+          grep -q '"deviceAutoApprove"' scripts/openclaw_sso.sh
+          grep -q '"enabled": True' scripts/openclaw_sso.sh
+          grep -q '"operator.read"' scripts/openclaw_sso.sh
+          grep -q '"operator.write"' scripts/openclaw_sso.sh
+          grep -q '"operator.approvals"' scripts/openclaw_sso.sh
+          grep -q '"operator.questions"' scripts/openclaw_sso.sh
+          grep -q 'identityScopes' scripts/openclaw_sso.sh
+          grep -q '"operator.admin" not in scopes' scripts/openclaw_sso.sh
+          grep -q 'allowUsers' scripts/openclaw_sso.sh
+          grep -q 'trustedProxies' scripts/openclaw_sso.sh
+          grep -q 'proxy_set_header X-Forwarded-User' scripts/openclaw_sso.sh
+          grep -q 'ROTATE_CONTROL_SECRETS' scripts/openclaw_sso.sh
+          grep -q 'Gateway secrets   : server-side only; never injected into browser' scripts/openclaw_sso.sh
 
       - name: Boot persistence and unified control contracts
         shell: bash

@@ -81,9 +81,10 @@ jobs:
           grep -q 'openclaw.ai/install.sh' scripts/client.sh
           grep -q 'models.providers.ollama.baseUrl' scripts/client.sh
           grep -q 'config set tools.profile messaging' scripts/client.sh
-          grep -q 'gateway.http.endpoints.chatCompletions.enabled true' scripts/unified_control.sh
+          grep -q 'chatCompletions.*enabled' scripts/unified_control.sh
           grep -q '"-z"' scripts/control_center.py
           grep -q 'openclaw/default' scripts/control_center.py
+          grep -q 'X-Forwarded-For' scripts/control_center.py
 
       - name: End-to-end readiness contracts
         shell: bash
@@ -94,6 +95,7 @@ jobs:
           grep -q 'Hermes configuration verified' scripts/client.sh
           grep -q 'OpenClaw Gateway installed/running/reachable' scripts/client.sh
           grep -q 'scripts/client_services.sh' install.sh
+          grep -q 'LAN_CONTROL=0 bash' install.sh
           grep -q 'scripts/unified_control.sh' install.sh
 
       - name: Boot persistence and unified control contracts
@@ -103,14 +105,19 @@ jobs:
           grep -q 'loginctl enable-linger' scripts/client_services.sh
           grep -q 'gateway install --start-now --start-on-login' scripts/client_services.sh
           grep -q 'auto-agent-hermes-dashboard.service' scripts/client_services.sh
-          grep -q 'listen ${LAPTOP_IP}:${CENTER_PORT}' scripts/unified_control.sh
+          grep -q 'config patch --stdin' scripts/unified_control.sh
+          grep -q '"mode": "trusted-proxy"' scripts/unified_control.sh
+          grep -q 'identityScopes' scripts/unified_control.sh
+          grep -q 'requiredHeaders' scripts/unified_control.sh
+          grep -q '"allowLoopback": True' scripts/unified_control.sh
+          grep -q 'listen ${CENTER_PORT}' scripts/unified_control.sh
+          grep -q 'allow ${LAN_CIDR}' scripts/unified_control.sh
           grep -q 'auth_request /_auth' scripts/unified_control.sh
-          grep -q 'gateway.bind loopback' scripts/unified_control.sh
-          grep -q 'gateway.auth.mode trusted-proxy' scripts/unified_control.sh
-          grep -q 'gateway.trustedProxies' scripts/unified_control.sh
-          grep -q 'AUTO_AGENT_CONTROL_PASSWORD' scripts/unified_control.sh
+          grep -q 'proxy_set_header X-Forwarded-User' scripts/unified_control.sh
+          grep -q "sub_filter '<body>'" scripts/unified_control.sh
           grep -q '@hermes' scripts/control_center.py
           grep -q '@openclaw' scripts/control_center.py
+          grep -q 'location.href=hermesUrl' scripts/control_center.py
           grep -q 'LOGIN_MAX_ATTEMPTS' scripts/control_center.py
           grep -q 'AUTO_AGENT UNIFIED CONTROL CENTER READY' scripts/unified_control.sh
 

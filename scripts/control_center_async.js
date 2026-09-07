@@ -25,6 +25,11 @@
     });
   }
 
+  function renderMessage(el, text, role='assistant') {
+    if (window.AutoAgentRenderMessage) window.AutoAgentRenderMessage(el, text, role);
+    else el.textContent = String(text ?? '');
+  }
+
   function createPending(agent) {
     welcome.style.display = 'none';
     const row = document.createElement('div');
@@ -44,7 +49,7 @@
     row.append(avatar, body);
     conversation.appendChild(row);
     row.scrollIntoView({behavior:'smooth', block:'end'});
-    return {row, meta, text};
+    return {row, avatar, meta, text};
   }
 
   function setBusy(value) {
@@ -62,7 +67,7 @@
     body.className = 'msg-body';
     const text = document.createElement('div');
     text.className = 'msg-text';
-    text.textContent = message;
+    renderMessage(text, message, 'user');
     body.appendChild(text);
     row.appendChild(body);
     conversation.appendChild(row);
@@ -97,10 +102,6 @@
     const pollHeaders = {'accept':'application/json'};
     if (job.poll_token) pollHeaders['X-Auto-Agent-Job-Token'] = job.poll_token;
 
-    // There is deliberately NO Auto Agent wall-clock deadline here. The
-    // selected agent owns its runtime policy; the server reports completion or
-    // the agent's own configured timeout. This avoids imposing a shorter
-    // browser limit than Hermes/OpenClaw.
     for (;;) {
       await sleep(delay);
       let data;
@@ -119,16 +120,20 @@
 
       const policy = data.runtime_policy || job.runtime_policy || {};
       if (data.status === 'done') {
-        pending.meta.textContent = data.agent || job.agent || 'Auto Agent';
-        pending.text.textContent = data.answer || '';
+        pending.meta.textContent = (data.agent || job.agent || 'Auto Agent').toUpperCase();
+        // Verbatim agent content. Markdown rendering changes presentation only.
+        renderMessage(pending.text, data.answer || '', 'assistant');
         mode.value = data.agent || mode.value;
         pending.row.scrollIntoView({behavior:'smooth', block:'end'});
+        window.dispatchEvent(new CustomEvent('autoagent:history-changed'));
         return;
       }
       if (data.status === 'error') {
         pending.row.className = 'msg-row error';
+        pending.avatar.textContent = '!';
         pending.meta.textContent = 'Error';
-        pending.text.textContent = data.error || 'Agent execution failed';
+        renderMessage(pending.text, data.error || 'Agent execution failed', 'error');
+        window.dispatchEvent(new CustomEvent('autoagent:history-changed'));
         return;
       }
 
@@ -159,21 +164,36 @@
       });
       const job = await parseJsonResponse(r);
       if (!job.job_id || !job.poll_url) throw new Error('Async chat submission returned no job id.');
+      if (job.conversation_id) conversationId = job.conversation_id;
       const label = policyLabel(job.runtime_policy);
       pending.meta.textContent = `${job.agent || 'Auto Agent'} · queued`;
       pending.text.textContent = label ? `Queued · ${label}` : 'Queued…';
+      window.dispatchEvent(new CustomEvent('autoagent:history-changed'));
       await pollJob(job, pending);
     } catch (error) {
       pending.row.className = 'msg-row error';
+      pending.avatar.textContent = '!';
       pending.meta.textContent = 'Error';
-      pending.text.textContent = String(error);
+      renderMessage(pending.text, String(error), 'error');
     } finally {
       setBusy(false);
     }
   }
 
-  send.onclick = asyncSend;
+  function clearForNewChat() {
+    if (busy) return false;
+    conversationId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
+    conversation.querySelectorAll('.msg-row').forEach(node => node.remove());
+    welcome.style.display = 'grid';
+    mode.value = 'auto';
+    const chatButton = document.querySelector('.nav-btn[data-tab="chat"]');
+    if (chatButton) chatButton.click();
+    prompt.focus();
+    window.dispatchEvent(new CustomEvent('autoagent:newchat'));
+    return true;
+  }
 
+  send.onclick = asyncSend;
   prompt.addEventListener('keydown', event => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
@@ -182,16 +202,12 @@
     }
   }, true);
 
-  if (newChat) {
-    newChat.onclick = () => {
-      if (busy) return;
-      conversationId = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()));
-      conversation.querySelectorAll('.msg-row').forEach(node => node.remove());
-      welcome.style.display = 'grid';
-      mode.value = 'auto';
-      const chatButton = document.querySelector('.nav-btn[data-tab="chat"]');
-      if (chatButton) chatButton.click();
-      prompt.focus();
-    };
-  }
+  if (newChat) newChat.onclick = clearForNewChat;
+
+  window.AutoAgentChat = {
+    getConversationId: () => conversationId,
+    setConversationId: id => { if (id) conversationId = String(id); },
+    newChat: clearForNewChat,
+    busy: () => busy,
+  };
 })();

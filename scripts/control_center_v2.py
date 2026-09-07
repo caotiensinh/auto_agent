@@ -22,7 +22,8 @@ PASSWORD = os.environ.get("AUTO_AGENT_CONTROL_PASSWORD", "")
 SESSION_SECRET = os.environ.get("AUTO_AGENT_SESSION_SECRET", "")
 SESSION_TTL = int(os.environ.get("AUTO_AGENT_SESSION_TTL", "43200"))
 NATIVE_SESSION_TTL = int(os.environ.get("AUTO_AGENT_NATIVE_SESSION_TTL", "900"))
-SSO_TTL = int(os.environ.get("AUTO_AGENT_SSO_TTL", "30"))
+SSO_TTL = int(os.environ.get("AUTO_AGENT_SSO_TTL", "180"))
+PUBLIC_DOMAIN = os.environ.get("AUTO_AGENT_PUBLIC_DOMAIN", "").strip().lower().lstrip(".")
 
 HERMES = os.environ.get("AUTO_AGENT_HERMES_BIN", os.path.expanduser("~/.local/bin/hermes"))
 OPENCLAW_BIN = os.environ.get("AUTO_AGENT_OPENCLAW_BIN", os.path.expanduser("~/.local/bin/openclaw"))
@@ -38,16 +39,23 @@ OPENCLAW_PUBLIC_HOST = os.environ.get("AUTO_AGENT_OPENCLAW_PUBLIC_HOST", "").str
 
 if not PASSWORD or not SESSION_SECRET or not OPENCLAW_LOCAL_PASSWORD:
     raise SystemExit("Control Center credentials are incomplete")
+if not PUBLIC_DOMAIN:
+    raise SystemExit("AUTO_AGENT_PUBLIC_DOMAIN is required for secure native SSO handoff")
 
 FAILED_LOGINS = {}
 LOGIN_WINDOW = 300
 LOGIN_MAX_ATTEMPTS = 8
 USED_SSO_NONCES = {}
 SSO_LOCK = threading.Lock()
+SSO_BRIDGE_COOKIE = "__Secure-auto_agent_sso_bridge"
 SSO_HOSTS = {
     "hermes": HERMES_PUBLIC_HOST,
     "openclaw": OPENCLAW_PUBLIC_HOST,
 }
+
+for _name, _host in (("workspace", CENTER_PUBLIC_HOST), *SSO_HOSTS.items()):
+    if not _host or not (_host == PUBLIC_DOMAIN or _host.endswith("." + PUBLIC_DOMAIN)):
+        raise SystemExit(f"{_name} public host must be inside AUTO_AGENT_PUBLIC_DOMAIN")
 
 
 def b64u(data: bytes) -> str:
@@ -98,7 +106,9 @@ def make_sso_token(target: str) -> str:
     if not host:
         raise ValueError("public hostname missing")
     payload = {
-        "v": 1,
+        "v": 2,
+        "purpose": "native-handoff",
+        "iss": CENTER_PUBLIC_HOST,
         "target": target,
         "host": host,
         "exp": int(time.time()) + SSO_TTL,
@@ -115,7 +125,9 @@ def consume_sso_token(token: str, expected_target: str, expected_host: str) -> b
         if not hmac.compare_digest(sign("sso:" + body), sig):
             return False
         payload = json.loads(body)
-        if payload.get("v") != 1:
+        if payload.get("v") != 2 or payload.get("purpose") != "native-handoff":
+            return False
+        if payload.get("iss") != CENTER_PUBLIC_HOST:
             return False
         if payload.get("target") != expected_target:
             return False
@@ -312,7 +324,7 @@ def app_page() -> str:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "AutoAgentControl/0.5.8"
+    server_version = "AutoAgentControl/0.5.9"
 
     def log_message(self, fmt, *args):
         try:
@@ -344,6 +356,17 @@ class Handler(BaseHTTPRequestHandler):
         if self.request_is_https():
             parts.append("Secure")
         return "; ".join(parts)
+
+    def bridge_cookie(self, value: str, max_age: int):
+        return "; ".join([
+            f"{SSO_BRIDGE_COOKIE}={value}",
+            f"Domain=.{PUBLIC_DOMAIN}",
+            "Path=/_auto_agent_sso",
+            "HttpOnly",
+            "Secure",
+            "SameSite=Lax",
+            f"Max-Age={max_age}",
+        ])
 
     def security_headers(self, csp=None):
         self.send_header("Cache-Control", "no-store")
@@ -394,19 +417,49 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("request too large")
         return parse_qs(self.rfile.read(length).decode(errors="replace"))
 
-    def sso_page(self, target):
+    def sso_start(self, target: str, retry: int = 0):
         host = SSO_HOSTS.get(target, "")
         if not host:
             self.send_html(503, "<h1>Public SSO target is not configured</h1>")
             return
+        if not self.request_is_https():
+            self.send_html(400, "<h1>Public native SSO requires HTTPS</h1>")
+            return
         token = make_sso_token(target)
-        action = f"https://{host}/_auto_agent_sso"
-        body = f"""<!doctype html><html><head><meta charset="utf-8"><title>Connecting…</title></head>
-<body><form id="sso" method="post" action="{html.escape(action, quote=True)}">
-<input type="hidden" name="token" value="{html.escape(token, quote=True)}">
-</form><script>document.getElementById('sso').submit()</script>
-<noscript><button form="sso" type="submit">Continue</button></noscript></body></html>"""
-        self.send_html(200, body, csp=f"default-src 'none'; script-src 'unsafe-inline'; form-action https://{host}; frame-ancestors 'none'")
+        attempt = 2 if retry else 1
+        destination = f"https://{host}/_auto_agent_sso?attempt={attempt}"
+        self.redirect(destination, [("Set-Cookie", self.bridge_cookie(token, SSO_TTL))])
+
+    def validate_sso_boundary(self, target: str) -> tuple[bool, str]:
+        boundary = self.headers.get("X-Auto-Agent-SSO-Boundary", "") == "1"
+        forwarded_host = self.headers.get("X-Forwarded-Host", "").split(":", 1)[0].strip().lower()
+        expected_host = SSO_HOSTS.get(target, "")
+        ok = boundary and bool(expected_host) and forwarded_host == expected_host and self.request_is_https()
+        return ok, expected_host
+
+    def finish_sso(self, target: str, token: str, attempt: int):
+        boundary_ok, expected_host = self.validate_sso_boundary(target)
+        clear_bridge = ("Set-Cookie", self.bridge_cookie("", 0))
+        if not boundary_ok:
+            self.send_json(403, {"error": "invalid_sso_boundary"})
+            return
+        if token and consume_sso_token(token, target, expected_host):
+            self.redirect("/", [
+                ("Set-Cookie", self.session_cookie(make_session(NATIVE_SESSION_TTL), NATIVE_SESSION_TTL)),
+                clear_bridge,
+            ])
+            return
+        if attempt <= 1:
+            retry_url = f"https://{CENTER_PUBLIC_HOST}/sso/{target}?retry=1"
+            self.redirect(retry_url, [clear_bridge])
+            return
+        back = f"https://{CENTER_PUBLIC_HOST}/sso/{target}"
+        body = (
+            "<h1>Native SSO handoff failed</h1>"
+            "<p>The temporary handoff cookie was missing, expired, or already used after the Cloudflare Access hop.</p>"
+            f"<p><a href=\"{html.escape(back, quote=True)}\">Retry from Workspace</a></p>"
+        )
+        self.send_html(403, body, extra_headers=[clear_bridge])
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -431,11 +484,22 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(401)
                 self.end_headers()
             return
+        if path == "/_auto_agent_sso":
+            target = self.headers.get("X-Auto-Agent-SSO-Target", "").strip().lower()
+            try:
+                attempt = max(1, min(2, int(query.get("attempt", ["1"])[0])))
+            except Exception:
+                attempt = 1
+            cookies = self.cookies()
+            token = cookies[SSO_BRIDGE_COOKIE].value if SSO_BRIDGE_COOKIE in cookies else ""
+            self.finish_sso(target, token, attempt)
+            return
         if path in ("/sso/hermes", "/sso/openclaw"):
             target = path.rsplit("/", 1)[-1]
             if not self.require_auth(path):
                 return
-            self.sso_page(target)
+            retry = 1 if query.get("retry", ["0"])[0] == "1" else 0
+            self.sso_start(target, retry=retry)
             return
         if path == "/api/status":
             if not self.authed():
@@ -445,7 +509,7 @@ class Handler(BaseHTTPRequestHandler):
             hdb, _ = command_output(["systemctl", "--user", "is-active", "auto-agent-hermes-dashboard.service"])
             center, _ = command_output(["systemctl", "--user", "is-active", "auto-agent-control-center.service"])
             ogw, _ = command_output([OPENCLAW_BIN, "gateway", "status"])
-            self.send_json(200, {"center": center.strip(), "hermes_dashboard": hdb.strip(), "hermes_gateway": hgw, "openclaw_gateway": ogw, "public_hosts": {"workspace": CENTER_PUBLIC_HOST, "hermes": HERMES_PUBLIC_HOST, "openclaw": OPENCLAW_PUBLIC_HOST}})
+            self.send_json(200, {"center": center.strip(), "hermes_dashboard": hdb.strip(), "hermes_gateway": hgw, "openclaw_gateway": ogw, "public_hosts": {"workspace": CENTER_PUBLIC_HOST, "hermes": HERMES_PUBLIC_HOST, "openclaw": OPENCLAW_PUBLIC_HOST}, "sso": {"mode": "temporary-domain-bridge", "ttl": SSO_TTL, "native_session_ttl": NATIVE_SESSION_TTL}})
             return
         if path == "/":
             if not self.require_auth("/"):
@@ -457,6 +521,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urlparse(self.path)
         path = parsed.path
+        query = parse_qs(parsed.query)
         if path == "/login":
             try:
                 form = self.read_form(16384)
@@ -482,23 +547,18 @@ class Handler(BaseHTTPRequestHandler):
             self.redirect(next_path, [("Set-Cookie", self.session_cookie(make_session(), SESSION_TTL))])
             return
         if path == "/_auto_agent_sso":
-            boundary = self.headers.get("X-Auto-Agent-SSO-Boundary", "") == "1"
             target = self.headers.get("X-Auto-Agent-SSO-Target", "").strip().lower()
-            forwarded_host = self.headers.get("X-Forwarded-Host", "").strip().lower()
-            expected_host = SSO_HOSTS.get(target, "")
-            if not boundary or not expected_host or forwarded_host != expected_host or not self.request_is_https():
-                self.send_json(403, {"error": "invalid_sso_boundary"})
-                return
             try:
                 form = self.read_form(65536)
             except Exception:
                 self.send_json(413, {"error": "invalid_sso_request"})
                 return
             token = form.get("token", [""])[0]
-            if not consume_sso_token(token, target, expected_host):
-                self.send_json(403, {"error": "invalid_or_replayed_sso_token"})
-                return
-            self.redirect("/", [("Set-Cookie", self.session_cookie(make_session(NATIVE_SESSION_TTL), NATIVE_SESSION_TTL))])
+            try:
+                attempt = max(1, min(2, int(query.get("attempt", ["1"])[0])))
+            except Exception:
+                attempt = 1
+            self.finish_sso(target, token, attempt)
             return
         if path == "/api/chat":
             if not self.authed():

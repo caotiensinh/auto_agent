@@ -34,6 +34,42 @@ has_nvidia() {
   return 1
 }
 
+prepare_client_runtime_path() {
+  local d found=""
+
+  # Reuse user-scoped runtimes already installed by Hermes/OpenClaw.
+  # This is especially important for curl|bash runs because the current shell
+  # does not automatically reload ~/.bashrc after an installer updates PATH.
+  for d in \
+    "$HOME/.local/bin" \
+    "$HOME/.hermes/bin" \
+    "$HOME/.hermes/node/bin" \
+    "$HOME/.openclaw/bin" \
+    "$HOME/.volta/bin" \
+    "$HOME/.nvm/current/bin"; do
+    [[ -d "$d" ]] && PATH="$d:$PATH"
+  done
+  export PATH
+
+  # If Node is present in a non-standard Hermes/user location, reuse it rather
+  # than installing another Node copy.
+  if ! command -v node >/dev/null 2>&1; then
+    found="$(find "$HOME/.hermes" "$HOME/.local" -maxdepth 5 -type f -name node -perm -u+x -print -quit 2>/dev/null || true)"
+    if [[ -n "$found" ]]; then
+      PATH="$(dirname "$found"):$PATH"
+      export PATH
+    fi
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    log "Node runtime: $(command -v node) ($(node --version 2>/dev/null || echo unknown)) [REUSE]"
+  elif [[ -x "$HOME/.local/bin/openclaw" || -x "$HOME/.openclaw/bin/openclaw" ]]; then
+    die "OpenClaw exists but no Node runtime was found. Refusing to reinstall blindly; inspect the existing Node installation."
+  else
+    log "Node runtime: not present yet; client installer may install it only if required"
+  fi
+}
+
 case "$ROLE" in
   auto)
     if has_nvidia; then ROLE=server; else ROLE=client; fi
@@ -44,6 +80,10 @@ esac
 
 log "Ubuntu: ${PRETTY_NAME:-$VERSION_ID}"
 log "Selected role: $ROLE"
+
+if [[ "$ROLE" == "client" ]]; then
+  prepare_client_runtime_path
+fi
 
 TMP="$(mktemp)"
 trap 'rm -f "$TMP"' EXIT

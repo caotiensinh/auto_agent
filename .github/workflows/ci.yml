@@ -22,6 +22,7 @@ jobs:
           bash -n install.sh
           bash -n scripts/server.sh
           bash -n scripts/client.sh
+          bash -n scripts/client_services.sh
 
       - name: Inventory-first and reuse contracts
         shell: bash
@@ -61,6 +62,7 @@ jobs:
           set -euo pipefail
           grep -q 'AUTO_AGENT_COMPONENT=server' scripts/server.sh
           grep -q 'AUTO_AGENT_COMPONENT=client' scripts/client.sh
+          grep -q 'AUTO_AGENT_COMPONENT=client-services' scripts/client_services.sh
           grep -q 'OLLAMA_HOST=127.0.0.1:11434' scripts/server.sh
           grep -q '_local-ai._tcp' scripts/server.sh
           grep -q '_local-ai._tcp' scripts/client.sh
@@ -91,6 +93,21 @@ jobs:
           grep -q 'gateway start' scripts/client.sh
           grep -q 'OpenClaw Gateway installed/running/reachable' scripts/client.sh
           grep -q 'refusing READY state' scripts/client.sh
+
+      - name: Boot persistence and control contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'scripts/client_services.sh' install.sh
+          grep -q 'loginctl enable-linger' scripts/client_services.sh
+          grep -q 'gateway install --start-now --start-on-login' scripts/client_services.sh
+          grep -q 'hermes-gateway.service' scripts/client_services.sh
+          grep -q 'auto-agent-hermes-dashboard.service' scripts/client_services.sh
+          grep -q 'dashboard --host' scripts/client_services.sh
+          grep -q 'gateway.bind lan' scripts/client_services.sh
+          grep -q 'gateway.auth.mode token' scripts/client_services.sh
+          grep -q 'Management CLI installed' scripts/client_services.sh
+          grep -q 'auto-agent status' scripts/client_services.sh
 
       - name: Ensure no hard-coded API token
         shell: bash

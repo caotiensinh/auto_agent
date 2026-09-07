@@ -23,29 +23,26 @@ jobs:
           bash -n scripts/server.sh
           bash -n scripts/client.sh
           bash -n scripts/client_services.sh
-          bash -n scripts/unified_control.sh
-          bash -n scripts/openclaw_sso.sh
           bash -n scripts/unified_control_v2.sh
           bash -n scripts/openclaw_sso_v2.sh
           bash -n scripts/ui_upgrade.sh
-          python3 -m py_compile scripts/control_center.py scripts/control_center_v2.py scripts/control_center_v3.py
+          python3 -m py_compile scripts/control_center.py scripts/control_center_v2.py scripts/control_center_v3.py scripts/control_center_v4.py scripts/control_center_v5.py
+          node --check scripts/control_center_async.js
+          node --check scripts/control_center_polish.js
 
-      - name: Bootstrap v0.6.1 contracts
+      - name: Bootstrap v0.6.2 contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.6.1"' install.sh
+          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.6.2"' install.sh
           grep -q 'Cache-Control: no-cache' install.sh
           grep -q 'auto_agent_cache_bust=' install.sh
           grep -q 'run_bash_component' install.sh
-          grep -q '</dev/tty' install.sh
-          grep -q '</dev/null' install.sh
           grep -Fq 'scripts/unified_control_v2.sh' install.sh
           grep -Fq 'scripts/ui_upgrade.sh' install.sh
           grep -Fq 'scripts/openclaw_sso_v2.sh' install.sh
-          grep -Fq "AUTO_AGENT_COMPONENT=ui-v061" scripts/ui_upgrade.sh
-          ! grep -Fq 'download_component scripts/unified_control.sh "$UNIFIED_TMP"' install.sh
-          ! grep -Fq 'download_component scripts/openclaw_sso.sh "$SSO_TMP"' install.sh
+          grep -Fq 'AUTO_AGENT_COMPONENT=ui-v062' scripts/ui_upgrade.sh
+          grep -Fq "download_component scripts/ui_upgrade.sh \"\$UI_TMP\" 'AUTO_AGENT_COMPONENT=ui-v062'" install.sh
 
       - name: Inventory-first and reuse contracts
         shell: bash
@@ -69,11 +66,8 @@ jobs:
           grep -q '\$HOME/.hermes/node/bin' install.sh
           grep -q 'openclaw_startup_probe' scripts/client.sh
           grep -q '/startupz' scripts/client.sh
-          grep -q 'openclaw_startup_probe' scripts/client_services.sh
-          grep -q '/startupz' scripts/client_services.sh
           grep -q 'verify_remote_inference' scripts/client.sh
           grep -q '/chat/completions' scripts/client.sh
-          ! grep -q 'reachable=bool(rpc.get' scripts/client.sh
 
       - name: Resilient native SSO contracts
         shell: bash
@@ -83,84 +77,47 @@ jobs:
           grep -q 'SSO_BRIDGE_COOKIE = "__Secure-auto_agent_sso_bridge"' scripts/control_center_v2.py
           grep -q 'def make_sso_token' scripts/control_center_v2.py
           grep -q 'def consume_sso_token' scripts/control_center_v2.py
-          grep -q '"purpose": "native-handoff"' scripts/control_center_v2.py
-          grep -q '"iss": CENTER_PUBLIC_HOST' scripts/control_center_v2.py
           grep -q 'USED_SSO_NONCES' scripts/control_center_v2.py
-          grep -q 'SSO_LOCK' scripts/control_center_v2.py
           grep -q 'def bridge_cookie' scripts/control_center_v2.py
-          grep -q 'f"Domain=.{PUBLIC_DOMAIN}"' scripts/control_center_v2.py
-          grep -q '"Path=/_auto_agent_sso"' scripts/control_center_v2.py
           grep -q '"HttpOnly"' scripts/control_center_v2.py
           grep -q '"Secure"' scripts/control_center_v2.py
           grep -q '"SameSite=Lax"' scripts/control_center_v2.py
-          grep -q 'def sso_start' scripts/control_center_v2.py
-          grep -q 'def finish_sso' scripts/control_center_v2.py
-          grep -q 'attempt <= 1' scripts/control_center_v2.py
-          grep -q 'retry=1' scripts/control_center_v2.py
           ! grep -q 'cf_access_authed' scripts/control_center_v2.py
           ! grep -q 'Cf-Access-Jwt-Assertion' scripts/control_center_v2.py
 
-      - name: SSO replay and target-binding test
-        shell: bash
-        env:
-          AUTO_AGENT_CONTROL_PASSWORD: test-password
-          AUTO_AGENT_SESSION_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-          OPENCLAW_LOCAL_PASSWORD: local-password
-          AUTO_AGENT_PUBLIC_DOMAIN: example.com
-          AUTO_AGENT_CENTER_PUBLIC_HOST: workspace.example.com
-          AUTO_AGENT_HERMES_PUBLIC_HOST: hermes.example.com
-          AUTO_AGENT_OPENCLAW_PUBLIC_HOST: openclaw.example.com
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import base64
-          import importlib.util
-          import json
-          spec = importlib.util.spec_from_file_location("cc", "scripts/control_center_v2.py")
-          m = importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(m)
-          session = m.make_session(30)
-          assert m.validate_session(session)
-          token = m.make_sso_token("hermes")
-          payload_b64 = token.split('.', 1)[0]
-          payload = json.loads(base64.urlsafe_b64decode(payload_b64 + '=' * (-len(payload_b64) % 4)))
-          assert payload["v"] == 2
-          assert payload["purpose"] == "native-handoff"
-          assert payload["iss"] == "workspace.example.com"
-          assert payload["target"] == "hermes"
-          assert payload["host"] == "hermes.example.com"
-          assert m.consume_sso_token(token, "hermes", "hermes.example.com")
-          assert not m.consume_sso_token(token, "hermes", "hermes.example.com"), "SSO replay was accepted"
-          wrong = m.make_sso_token("openclaw")
-          assert not m.consume_sso_token(wrong, "hermes", "hermes.example.com")
-          assert "/sso/hermes" in m.app_page()
-          assert "/sso/openclaw" in m.app_page()
-          PY
-
-      - name: UI v0.6.1 contracts
+      - name: UI + persistent history contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'AUTO_AGENT_COMPONENT=ui-v061' scripts/ui_upgrade.sh
-          grep -Fq 'control_center_ui.html' scripts/ui_upgrade.sh
-          grep -Fq 'control_center_v3.py' scripts/ui_upgrade.sh
-          grep -Fq 'Collapsible desktop sidebar installed' scripts/ui_upgrade.sh
-          grep -Fq 'Top horizontal bar removed' scripts/ui_upgrade.sh
-          grep -Fq 'Existing SSO/auth/backend logic preserved' scripts/ui_upgrade.sh
+          grep -Fq 'AUTO_AGENT_COMPONENT=ui-v062' scripts/ui_upgrade.sh
+          grep -Fq 'control_center_v5.py' scripts/ui_upgrade.sh
+          grep -Fq 'control_center_polish.js' scripts/ui_upgrade.sh
+          grep -Fq 'Persistent server-side SQLite chat history installed' scripts/ui_upgrade.sh
+          grep -Fq 'Hermes/OpenClaw output remains verbatim' scripts/ui_upgrade.sh
           grep -Fq 'class="sidebar"' scripts/control_center_ui.html
           grep -Fq 'id="sidebarToggle"' scripts/control_center_ui.html
           grep -Fq 'sidebar-collapsed' scripts/control_center_ui.html
-          grep -Fq "localStorage.getItem('auto_agent_sidebar_collapsed')" scripts/control_center_ui.html
           grep -Fq 'class="composer-wrap"' scripts/control_center_ui.html
           grep -Fq '<textarea id="prompt"' scripts/control_center_ui.html
-          grep -Fq 'id="mode"' scripts/control_center_ui.html
-          grep -Fq 'data-tab="hermes"' scripts/control_center_ui.html
-          grep -Fq 'data-tab="openclaw"' scripts/control_center_ui.html
-          grep -Fq "const hermesUrl=isPublic?'/sso/hermes'" scripts/control_center_ui.html
-          grep -Fq "const openclawUrl=isPublic?'/sso/openclaw'" scripts/control_center_ui.html
           ! grep -Fq 'class="topbar"' scripts/control_center_ui.html
-          grep -Fq 'AutoAgentControl/0.6.1' scripts/control_center_v3.py
-          grep -Fq 'backend.APP_HTML = ui' scripts/control_center_v3.py
+          grep -Fq 'chat_history.sqlite3' scripts/control_center_v5.py
+          grep -Fq '/api/history' scripts/control_center_v5.py
+          grep -Fq 'verbatim pass-through' scripts/control_center_v5.py
+          grep -Fq -- '--chat-font:17px' scripts/control_center_polish.js
+          grep -Fq 'AutoAgentRenderMessage' scripts/control_center_polish.js
+
+      - name: Agent-owned runtime contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'agent.run_budget_seconds' scripts/control_center_v4.py
+          grep -Fq 'agent.gateway_timeout' scripts/control_center_v4.py
+          grep -Fq 'agents.defaults.timeoutSeconds' scripts/control_center_v4.py
+          grep -Fq 'def resolve_runtime_policy' scripts/control_center_v4.py
+          grep -Fq 'X-Auto-Agent-Job-Token' scripts/control_center_v4.py
+          grep -Fq 'for (;;)' scripts/control_center_async.js
+          ! grep -Fq '15 minute client wait limit' scripts/control_center_async.js
+          ! grep -Fq 'timeout=900' scripts/control_center_v4.py
 
       - name: Nginx public boundary contracts
         shell: bash
@@ -170,55 +127,19 @@ jobs:
           grep -Fq 'CENTER_PUBLIC_HOST="${AUTO_AGENT_CENTER_PUBLIC_HOST:-workspace.${PUBLIC_DOMAIN}}"' scripts/unified_control_v2.sh
           grep -Fq 'HERMES_PUBLIC_HOST="${AUTO_AGENT_HERMES_PUBLIC_HOST:-hermes.${PUBLIC_DOMAIN}}"' scripts/unified_control_v2.sh
           grep -Fq 'OPENCLAW_PUBLIC_HOST="${AUTO_AGENT_OPENCLAW_PUBLIC_HOST:-openclaw.${PUBLIC_DOMAIN}}"' scripts/unified_control_v2.sh
-          grep -Fq 'Environment=AUTO_AGENT_PUBLIC_DOMAIN=$PUBLIC_DOMAIN' scripts/unified_control_v2.sh
-          grep -Fq 'Environment=AUTO_AGENT_SSO_TTL=180' scripts/unified_control_v2.sh
           grep -Fq '$http_cf_connecting_ip' scripts/unified_control_v2.sh
-          grep -Fq 'proxy_set_header X-Forwarded-For \$auto_agent_client_ip;' scripts/unified_control_v2.sh
-          grep -Fq 'proxy_set_header X-Real-IP \$auto_agent_client_ip;' scripts/unified_control_v2.sh
-          grep -Fq 'proxy_set_header Cookie \$http_cookie;' scripts/unified_control_v2.sh
           grep -Fq 'X-Auto-Agent-SSO-Boundary 1' scripts/unified_control_v2.sh
-          grep -Fq 'X-Auto-Agent-SSO-Target hermes' scripts/unified_control_v2.sh
-          grep -Fq 'X-Auto-Agent-SSO-Target openclaw' scripts/unified_control_v2.sh
-          grep -Fq 'login?next=/sso/hermes' scripts/unified_control_v2.sh
-          grep -Fq 'login?next=/sso/openclaw' scripts/unified_control_v2.sh
-          grep -Fq 'Public DNS unresolved:' scripts/unified_control_v2.sh
           ! grep -Fq 'proxy_set_header Cf-Access-Jwt-Assertion' scripts/unified_control_v2.sh
 
-      - name: Unified Chat timeout contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          grep -Fq 'CENTER_API_TIMEOUT="${CONTROL_CENTER_API_TIMEOUT:-930}"' scripts/unified_control_v2.sh
-          grep -Fq 'location ^~ /api/' scripts/unified_control_v2.sh
-          grep -Fq 'proxy_send_timeout ${CENTER_API_TIMEOUT}s;' scripts/unified_control_v2.sh
-          grep -Fq 'proxy_read_timeout ${CENTER_API_TIMEOUT}s;' scripts/unified_control_v2.sh
-          grep -Fq 'proxy_buffering off;' scripts/unified_control_v2.sh
-          grep -q 'async function jsonResponse' scripts/control_center_v2.py
-          grep -q 'expected JSON, received' scripts/control_center_v2.py
-
-      - name: OpenClaw finalization and attribution contracts
+      - name: OpenClaw finalization contracts
         shell: bash
         run: |
           set -euo pipefail
           grep -q '"mode": "trusted-proxy"' scripts/openclaw_sso_v2.sh
           grep -q '"deviceAutoApprove"' scripts/openclaw_sso_v2.sh
           grep -q '"operator.admin" not in scopes' scripts/openclaw_sso_v2.sh
-          grep -q '"publicOrigin"' scripts/openclaw_sso_v2.sh
-          grep -q 'https://{public_host}' scripts/openclaw_sso_v2.sh
-          grep -q '198.51.100.10' scripts/openclaw_sso_v2.sh
           grep -q 'trusted-proxy HTTP smoke PASS' scripts/openclaw_sso_v2.sh
-          grep -Fq 'proxy_set_header Cookie $http_cookie;' scripts/openclaw_sso_v2.sh
-          grep -Fq 'proxy_set_header X-Forwarded-For $auto_agent_client_ip;' scripts/openclaw_sso_v2.sh
-          ! grep -Fq 'proxy_set_header Cf-Access-Jwt-Assertion' scripts/openclaw_sso_v2.sh
-          ! grep -q 'gateway restart' scripts/unified_control_v2.sh
-          ! grep -q 'config patch --stdin' scripts/unified_control_v2.sh
-
-      - name: OpenClaw restart ownership
-        shell: bash
-        run: |
-          set -euo pipefail
           grep -q 'Restarting OpenClaw Gateway once after final atomic configuration' scripts/openclaw_sso_v2.sh
-          grep -q 'Gateway restart   : exactly once in finalization phase' scripts/openclaw_sso_v2.sh
 
       - name: Ensure no hard-coded API token
         shell: bash

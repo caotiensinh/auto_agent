@@ -7,101 +7,99 @@
 <style>
 :root{
   color-scheme:dark;
-  --sidebar:#06251f;
-  --sidebar-2:#082d26;
-  --sidebar-line:#21483f;
-  --sidebar-text:#e7dfcd;
-  --sidebar-muted:#9fb2aa;
-  --accent:#42d392;
-  --accent-2:#73e7b1;
-  --bg:#0b0f12;
-  --surface:#11161a;
-  --surface-2:#171d22;
-  --surface-3:#1d242a;
-  --line:#29323a;
+  --bg:#0d1115;
+  --bg-soft:#10151a;
+  --sidebar:#0f1418;
+  --sidebar-hover:#151b20;
+  --sidebar-active:#18211f;
+  --line:#20282e;
+  --line-soft:#1a2227;
+  --surface:#151b20;
+  --surface-2:#1a2127;
+  --surface-3:#20282f;
   --text:#edf1f3;
-  --muted:#9ca7af;
-  --danger:#ef6b6b;
+  --muted:#929da5;
+  --muted-2:#66727a;
+  --accent:#7db7a8;
+  --accent-strong:#9bcbbc;
+  --danger:#e07777;
   --shadow:0 18px 60px rgba(0,0,0,.28);
-  --sidebar-w:262px;
+  --sidebar-open:252px;
+  --sidebar-closed:72px;
+  --sidebar-w:var(--sidebar-open);
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{overflow:hidden;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 button,input,textarea,select{font:inherit}
 button{color:inherit}
-.app-shell{height:100dvh;display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr);background:var(--bg)}
-.sidebar{position:relative;height:100dvh;min-height:0;background:var(--sidebar);border-right:1px solid var(--sidebar-line);display:flex;flex-direction:column;color:var(--sidebar-text);overflow:hidden}
-.brand-block{height:86px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;border-bottom:1px solid var(--sidebar-line);flex:0 0 auto}
-.brand{font:800 20px/1.02 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.08em;text-transform:uppercase}
-.brand small{display:block;margin-top:7px;font:500 9px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.16em;color:var(--sidebar-muted)}
-.collapse-btn{width:32px;height:32px;border:0;border-radius:8px;background:transparent;color:var(--sidebar-text);cursor:pointer;display:grid;place-items:center}.collapse-btn:hover{background:#ffffff10}
-.nav{padding:12px 0;overflow:auto;min-height:0}.nav::-webkit-scrollbar{width:6px}.nav::-webkit-scrollbar-thumb{background:#ffffff17;border-radius:999px}
-.nav-section-label{padding:14px 24px 8px;color:#7f9990;font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase}
-.nav-btn{position:relative;width:100%;min-height:47px;padding:0 22px;border:0;background:transparent;color:var(--sidebar-text);display:flex;align-items:center;gap:14px;cursor:pointer;text-align:left;font:600 13px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.13em;text-transform:uppercase}
-.nav-btn:hover{background:#ffffff08}.nav-btn.active{background:#ffffff06;color:#fff}.nav-btn.active:before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:2px;background:var(--accent-2)}
-.nav-icon{width:19px;height:19px;display:grid;place-items:center;flex:0 0 19px;color:#d8d2c2}.nav-icon svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
-.sidebar-footer{margin-top:auto;border-top:1px solid var(--sidebar-line);flex:0 0 auto}.system-card{padding:15px 22px 13px;font:500 12px/1.8 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--sidebar-muted)}
-.system-card strong{color:var(--accent);font-weight:700}.footer-row{height:48px;padding:0 22px;border-top:1px solid var(--sidebar-line);display:flex;align-items:center;gap:10px;font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.08em}.footer-row .spacer{flex:1}.footer-row button{border:0;background:transparent;padding:6px;color:var(--sidebar-text);cursor:pointer}.footer-row button:hover{color:#fff}
-.main{height:100dvh;min-width:0;min-height:0;display:grid;grid-template-rows:58px minmax(0,1fr);background:radial-gradient(circle at 50% -20%,#172027 0,#0b0f12 36%,#0b0f12 100%)}
-.topbar{height:58px;border-bottom:1px solid #20272d;display:flex;align-items:center;padding:0 22px;gap:12px;background:rgba(11,15,18,.88);backdrop-filter:blur(14px)}
-.top-title{font-weight:700;letter-spacing:-.01em}.top-sub{color:var(--muted);font-size:12px}.top-spacer{flex:1}.connection-pill{display:flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid #253128;border-radius:999px;background:#0f1714;color:#b9c8c1;font-size:12px}.dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px #42d39217}
-.mobile-menu{display:none;border:0;background:transparent;width:34px;height:34px;border-radius:8px;cursor:pointer}.mobile-menu:hover{background:#ffffff0a}
-.content{min-height:0;position:relative}.panel{display:none;height:100%;min-height:0}.panel.active{display:block}
-.chat-panel{height:100%;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto}
-.messages{overflow:auto;padding:36px 24px 150px;scroll-behavior:smooth}.messages::-webkit-scrollbar{width:8px}.messages::-webkit-scrollbar-thumb{background:#ffffff17;border-radius:999px}
-.conversation{width:min(900px,100%);margin:0 auto}.welcome{min-height:calc(100dvh - 310px);display:grid;place-items:center;text-align:center;padding:40px 20px}.welcome-inner{max-width:650px}.welcome-mark{width:48px;height:48px;margin:0 auto 20px;border:1px solid #2b3b34;border-radius:15px;display:grid;place-items:center;background:#10201a;color:var(--accent-2);box-shadow:var(--shadow)}.welcome-mark svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8}.welcome h1{margin:0;font-size:clamp(28px,4vw,42px);font-weight:650;letter-spacing:-.04em}.welcome p{margin:12px auto 0;color:var(--muted);font-size:14px;line-height:1.7;max-width:560px}.welcome-chips{margin-top:24px;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}.chip{padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#12171b;color:#bac3c9;font-size:12px}
-.msg-row{display:flex;margin:0 auto 24px;width:min(900px,100%);gap:13px}.msg-row.user{justify-content:flex-end}.avatar{width:30px;height:30px;border-radius:9px;background:#142019;border:1px solid #273a31;color:var(--accent-2);display:grid;place-items:center;flex:0 0 30px;font:700 11px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.msg-body{min-width:0;max-width:min(760px,88%)}.msg-row.user .msg-body{background:#222a30;border:1px solid #313a42;border-radius:18px 18px 5px 18px;padding:11px 15px}.msg-row.agent .msg-body{padding:2px 0}.meta{margin-bottom:7px;color:#8ea19a;font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;text-transform:uppercase;letter-spacing:.08em}.msg-text{white-space:pre-wrap;word-break:break-word;line-height:1.7;font-size:14px;color:#e5e9eb}.msg-row.error .avatar{color:#ffabab;border-color:#4a2c2c;background:#271616}.msg-row.error .meta{color:#ef9090}
-.composer-wrap{position:absolute;left:0;right:0;bottom:0;padding:42px 24px 18px;background:linear-gradient(180deg,rgba(11,15,18,0),rgba(11,15,18,.94) 32%,#0b0f12 72%);pointer-events:none}.composer{pointer-events:auto;width:min(900px,100%);margin:0 auto;border:1px solid #303941;background:#171c20;border-radius:26px;box-shadow:0 18px 50px rgba(0,0,0,.34);padding:10px 10px 9px;transition:border-color .18s,box-shadow .18s}.composer:focus-within{border-color:#42534c;box-shadow:0 20px 60px rgba(0,0,0,.42),0 0 0 1px #42d39212}.composer textarea{display:block;width:100%;min-height:52px;max-height:220px;resize:none;border:0;outline:0;background:transparent;color:var(--text);padding:8px 10px 4px;line-height:1.55;font-size:15px}.composer textarea::placeholder{color:#78838b}.composer-bottom{display:flex;align-items:center;gap:8px;padding:4px 2px 1px}.mode-wrap{position:relative}.mode-select{appearance:none;border:1px solid #313b42;background:#11171b;color:#c9d1d6;border-radius:999px;padding:7px 31px 7px 11px;font-size:12px;outline:0;cursor:pointer}.mode-wrap:after{content:"⌄";position:absolute;right:11px;top:4px;color:#849098;pointer-events:none}.hint{color:#68747c;font-size:11px;margin-left:2px}.composer-spacer{flex:1}.send-btn{width:36px;height:36px;border:0;border-radius:50%;display:grid;place-items:center;background:#eef3f0;color:#10201a;cursor:pointer;transition:transform .12s,opacity .12s,background .12s}.send-btn:hover{transform:translateY(-1px);background:#fff}.send-btn:disabled{opacity:.38;cursor:not-allowed;transform:none}.send-btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.composer-note{text-align:center;color:#5f6b73;font-size:10px;margin-top:8px;pointer-events:auto}
-.status-panel{height:100%;overflow:auto;padding:28px}.status-card{width:min(980px,100%);margin:0 auto;border:1px solid var(--line);border-radius:18px;background:#12171b;overflow:hidden}.status-head{display:flex;align-items:center;padding:18px 20px;border-bottom:1px solid var(--line)}.status-head h2{margin:0;font-size:17px}.status-head .spacer{flex:1}.secondary-btn{border:1px solid #303941;background:#181e23;border-radius:10px;padding:8px 11px;cursor:pointer}.secondary-btn:hover{background:#20272d}.status-card pre{margin:0;padding:20px;white-space:pre-wrap;word-break:break-word;background:#0f1316;color:#cbd3d8;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;min-height:300px}
+.app-shell{height:100dvh;display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr);background:var(--bg);transition:grid-template-columns .2s ease}
+.app-shell.sidebar-collapsed{--sidebar-w:var(--sidebar-closed)}
+.sidebar{height:100dvh;min-height:0;background:var(--sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden;color:var(--text);transition:width .2s ease,background .2s ease}
+.brand-block{height:78px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--line-soft);flex:0 0 auto;white-space:nowrap}
+.brand-mark{width:34px;height:34px;border:1px solid #2a3638;border-radius:10px;display:grid;place-items:center;color:var(--accent-strong);background:#121a1a;flex:0 0 34px;font:800 12px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.04em}
+.brand-copy{min-width:0;overflow:hidden;transition:opacity .12s ease,width .2s ease}.brand{font:800 15px/1.08 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.10em}.brand small{display:block;margin-top:6px;color:var(--muted-2);font:600 8px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.14em}
+.sidebar-toggle{margin-left:auto;width:32px;height:32px;border:0;border-radius:8px;background:transparent;display:grid;place-items:center;cursor:pointer;color:#a9b3b8;flex:0 0 32px}.sidebar-toggle:hover{background:var(--sidebar-hover);color:#fff}.sidebar-toggle svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s ease}
+.nav{padding:12px 8px;overflow:auto;min-height:0}.nav::-webkit-scrollbar{width:6px}.nav::-webkit-scrollbar-thumb{background:#ffffff12;border-radius:999px}
+.nav-section-label{padding:15px 13px 7px;color:#66747b;font:700 9px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.15em;text-transform:uppercase;white-space:nowrap;overflow:hidden}
+.nav-btn{position:relative;width:100%;min-height:44px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:#c9d0d4;display:flex;align-items:center;gap:13px;cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden;font:600 12px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.10em;text-transform:uppercase}.nav-btn:hover{background:var(--sidebar-hover);color:#fff}.nav-btn.active{background:var(--sidebar-active);color:#f4f7f6}.nav-btn.active:before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:2px;border-radius:2px;background:var(--accent)}
+.nav-icon{width:20px;height:20px;display:grid;place-items:center;flex:0 0 20px;color:#a9b4b6}.nav-btn.active .nav-icon{color:var(--accent-strong)}.nav-icon svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}.nav-label{overflow:hidden;text-overflow:ellipsis}
+.sidebar-footer{margin-top:auto;border-top:1px solid var(--line-soft);flex:0 0 auto}.system-card{padding:14px 18px 12px;color:#7f8b91;font:500 11px/1.8 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:nowrap;overflow:hidden}.system-card strong{color:var(--accent-strong);font-weight:700}.footer-row{height:46px;padding:0 16px;border-top:1px solid var(--line-soft);display:flex;align-items:center;gap:10px;color:#a6b0b5;white-space:nowrap;overflow:hidden;font:600 10px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.07em}.footer-row .spacer{flex:1}.footer-row button{border:0;background:transparent;color:#9ca7ad;padding:6px;cursor:pointer}.footer-row button:hover{color:#fff}
+.app-shell.sidebar-collapsed .brand-copy,.app-shell.sidebar-collapsed .nav-label,.app-shell.sidebar-collapsed .nav-section-label,.app-shell.sidebar-collapsed .system-card,.app-shell.sidebar-collapsed .footer-text,.app-shell.sidebar-collapsed .logout-text{display:none}.app-shell.sidebar-collapsed .brand-block{padding:0 10px;justify-content:center;gap:4px}.app-shell.sidebar-collapsed .brand-mark{width:30px;height:30px;flex-basis:30px}.app-shell.sidebar-collapsed .sidebar-toggle{margin-left:0;width:25px}.app-shell.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}.app-shell.sidebar-collapsed .nav{padding-left:9px;padding-right:9px}.app-shell.sidebar-collapsed .nav-btn{justify-content:center;padding:0}.app-shell.sidebar-collapsed .nav-btn.active:before{top:10px;bottom:10px}.app-shell.sidebar-collapsed .footer-row{justify-content:center;padding:0 8px}.app-shell.sidebar-collapsed .footer-row .spacer{display:none}
+.main{height:100dvh;min-width:0;min-height:0;background:radial-gradient(circle at 50% -18%,#151c20 0,var(--bg) 36%,var(--bg) 100%);position:relative}.content{height:100%;min-height:0;position:relative}.panel{display:none;height:100%;min-height:0}.panel.active{display:block}
+.mobile-menu{display:none;position:absolute;z-index:30;left:14px;top:14px;width:38px;height:38px;border:1px solid var(--line);border-radius:11px;background:rgba(17,22,26,.88);backdrop-filter:blur(10px);cursor:pointer;color:#cbd3d7;box-shadow:0 8px 24px #0005}.mobile-menu:hover{background:#182027;color:#fff}.mobile-menu svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.chat-panel{height:100%;min-height:0;display:grid;grid-template-rows:minmax(0,1fr) auto}.messages{overflow:auto;padding:34px 24px 158px;scroll-behavior:smooth}.messages::-webkit-scrollbar{width:8px}.messages::-webkit-scrollbar-thumb{background:#ffffff12;border-radius:999px}.conversation{width:min(900px,100%);margin:0 auto}.welcome{min-height:calc(100dvh - 240px);display:grid;place-items:center;text-align:center;padding:40px 20px}.welcome-inner{max-width:650px}.welcome-mark{width:48px;height:48px;margin:0 auto 20px;border:1px solid #2b3738;border-radius:15px;display:grid;place-items:center;background:#131b1b;color:var(--accent-strong);box-shadow:var(--shadow)}.welcome-mark svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.8}.welcome h1{margin:0;font-size:clamp(28px,4vw,42px);font-weight:650;letter-spacing:-.04em}.welcome p{margin:12px auto 0;color:var(--muted);font-size:14px;line-height:1.7;max-width:560px}.welcome-chips{margin-top:24px;display:flex;justify-content:center;gap:8px;flex-wrap:wrap}.chip{padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#12181c;color:#aeb8bd;font-size:12px}
+.msg-row{display:flex;margin:0 auto 24px;width:min(900px,100%);gap:13px}.msg-row.user{justify-content:flex-end}.avatar{width:30px;height:30px;border-radius:9px;background:#141c1b;border:1px solid #293736;color:var(--accent-strong);display:grid;place-items:center;flex:0 0 30px;font:700 11px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.msg-body{min-width:0;max-width:min(760px,88%)}.msg-row.user .msg-body{background:#1c2328;border:1px solid #2a3339;border-radius:18px 18px 5px 18px;padding:11px 15px}.msg-row.agent .msg-body{padding:2px 0}.meta{margin-bottom:7px;color:#82918e;font:600 11px/1 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;text-transform:uppercase;letter-spacing:.08em}.msg-text{white-space:pre-wrap;word-break:break-word;line-height:1.7;font-size:14px;color:#e5e9eb}.msg-row.error .avatar{color:#ffb1b1;border-color:#4a3030;background:#251818}.msg-row.error .meta{color:#dd8585}
+.composer-wrap{position:absolute;left:0;right:0;bottom:0;padding:44px 24px 18px;background:linear-gradient(180deg,rgba(13,17,21,0),rgba(13,17,21,.94) 34%,var(--bg) 75%);pointer-events:none}.composer{pointer-events:auto;width:min(900px,100%);margin:0 auto;border:1px solid #2c353b;background:#171d22;border-radius:25px;box-shadow:0 18px 50px rgba(0,0,0,.32);padding:10px 10px 9px;transition:border-color .18s,box-shadow .18s}.composer:focus-within{border-color:#40514e;box-shadow:0 20px 60px rgba(0,0,0,.38),0 0 0 1px rgba(125,183,168,.10)}.composer textarea{display:block;width:100%;min-height:52px;max-height:220px;resize:none;border:0;outline:0;background:transparent;color:var(--text);padding:8px 10px 4px;line-height:1.55;font-size:15px}.composer textarea::placeholder{color:#737f87}.composer-bottom{display:flex;align-items:center;gap:8px;padding:4px 2px 1px}.mode-wrap{position:relative}.mode-select{appearance:none;border:1px solid #303940;background:#12181c;color:#c5cdd1;border-radius:999px;padding:7px 31px 7px 11px;font-size:12px;outline:0;cursor:pointer}.mode-wrap:after{content:"⌄";position:absolute;right:11px;top:4px;color:#7d898f;pointer-events:none}.hint{color:#606c73;font-size:11px;margin-left:2px}.composer-spacer{flex:1}.send-btn{width:36px;height:36px;border:0;border-radius:50%;display:grid;place-items:center;background:#e5ece9;color:#13201d;cursor:pointer;transition:transform .12s,opacity .12s,background .12s}.send-btn:hover{transform:translateY(-1px);background:#fff}.send-btn:disabled{opacity:.38;cursor:not-allowed;transform:none}.send-btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.composer-note{text-align:center;color:#566168;font-size:10px;margin-top:8px;pointer-events:auto}
+.status-panel{height:100%;overflow:auto;padding:34px 28px}.status-card{width:min(980px,100%);margin:0 auto;border:1px solid var(--line);border-radius:18px;background:#12181c;overflow:hidden}.status-head{display:flex;align-items:center;padding:18px 20px;border-bottom:1px solid var(--line)}.status-head h2{margin:0;font-size:17px}.status-head .spacer{flex:1}.secondary-btn{border:1px solid #2e383e;background:#171e23;border-radius:10px;padding:8px 11px;cursor:pointer}.secondary-btn:hover{background:#1d252b}.status-card pre{margin:0;padding:20px;white-space:pre-wrap;word-break:break-word;background:#0f1418;color:#c8d0d4;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;min-height:300px}
 .sidebar-backdrop{display:none}
 @media(max-width:900px){
-  :root{--sidebar-w:238px}.app-shell{grid-template-columns:1fr}.sidebar{position:fixed;z-index:40;left:0;top:0;width:var(--sidebar-w);transform:translateX(-100%);transition:transform .2s ease;box-shadow:20px 0 60px #0008}.app-shell.menu-open .sidebar{transform:translateX(0)}.main{grid-column:1}.mobile-menu{display:grid;place-items:center}.sidebar-backdrop{display:block;position:fixed;z-index:35;inset:0;background:#0008;opacity:0;pointer-events:none;transition:opacity .2s}.app-shell.menu-open .sidebar-backdrop{opacity:1;pointer-events:auto}.messages{padding-left:16px;padding-right:16px}.composer-wrap{padding-left:12px;padding-right:12px}.topbar{padding:0 14px}.connection-pill .label{display:none}
+  .app-shell,.app-shell.sidebar-collapsed{display:block}.sidebar{position:fixed;z-index:50;left:0;top:0;width:252px;transform:translateX(-100%);transition:transform .2s ease;box-shadow:22px 0 70px #0009}.app-shell.menu-open .sidebar{transform:translateX(0)}.app-shell.sidebar-collapsed .brand-copy,.app-shell.sidebar-collapsed .nav-label,.app-shell.sidebar-collapsed .nav-section-label,.app-shell.sidebar-collapsed .system-card,.app-shell.sidebar-collapsed .footer-text,.app-shell.sidebar-collapsed .logout-text{display:initial}.app-shell.sidebar-collapsed .brand-block{padding:0 16px;justify-content:flex-start;gap:10px}.app-shell.sidebar-collapsed .brand-mark{width:34px;height:34px;flex-basis:34px}.app-shell.sidebar-collapsed .sidebar-toggle{margin-left:auto;width:32px}.app-shell.sidebar-collapsed .sidebar-toggle svg{transform:none}.app-shell.sidebar-collapsed .nav{padding:12px 8px}.app-shell.sidebar-collapsed .nav-btn{justify-content:flex-start;padding:0 12px}.app-shell.sidebar-collapsed .footer-row{justify-content:flex-start;padding:0 16px}.app-shell.sidebar-collapsed .footer-row .spacer{display:block}.main{height:100dvh}.mobile-menu{display:grid;place-items:center}.sidebar-backdrop{display:block;position:fixed;z-index:45;inset:0;background:#0009;opacity:0;pointer-events:none;transition:opacity .2s}.app-shell.menu-open .sidebar-backdrop{opacity:1;pointer-events:auto}.messages{padding-left:16px;padding-right:16px;padding-top:68px}.composer-wrap{padding-left:12px;padding-right:12px}.sidebar-toggle{transform:rotate(180deg)}
 }
-@media(max-width:560px){.top-sub{display:none}.messages{padding-top:20px}.msg-body{max-width:92%}.hint{display:none}.welcome{min-height:calc(100dvh - 270px)}.composer{border-radius:22px}}
+@media(max-width:560px){.messages{padding-top:64px}.msg-body{max-width:92%}.hint{display:none}.welcome{min-height:calc(100dvh - 230px)}.composer{border-radius:22px}}
 </style>
 </head>
 <body>
 <div id="appShell" class="app-shell">
   <aside class="sidebar" aria-label="Auto Agent navigation">
     <div class="brand-block">
-      <div class="brand">AUTO<br>AGENT<small>CONTROL PLANE</small></div>
-      <button class="collapse-btn" id="closeMenu" aria-label="Close menu" title="Close menu">◫</button>
+      <div class="brand-mark">AA</div>
+      <div class="brand-copy"><div class="brand">AUTO AGENT<small>CONTROL PLANE</small></div></div>
+      <button class="sidebar-toggle" id="sidebarToggle" aria-label="Collapse sidebar" title="Collapse / expand sidebar">
+        <svg viewBox="0 0 24 24"><path d="m14 7-5 5 5 5"/><path d="M20 4v16"/></svg>
+      </button>
     </div>
     <nav class="nav">
       <div class="nav-section-label">Workspace</div>
-      <button class="nav-btn active" data-tab="chat"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg></span><span>Chat</span></button>
-      <button class="nav-btn" data-tab="hermes"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="m9 9 3 3-3 3M13 15h3"/></svg></span><span>Hermes</span></button>
-      <button class="nav-btn" data-tab="openclaw"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 8a5 5 0 0 1 10 0v8a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3z"/><path d="M9 5V3m6 2V3M9 12h.01M15 12h.01"/></svg></span><span>OpenClaw</span></button>
+      <button class="nav-btn active" data-tab="chat" title="Chat"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg></span><span class="nav-label">Chat</span></button>
+      <button class="nav-btn" data-tab="hermes" title="Hermes"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="m9 9 3 3-3 3M13 15h3"/></svg></span><span class="nav-label">Hermes</span></button>
+      <button class="nav-btn" data-tab="openclaw" title="OpenClaw"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 8a5 5 0 0 1 10 0v8a3 3 0 0 1-3 3h-4a3 3 0 0 1-3-3z"/><path d="M9 5V3m6 2V3M9 12h.01M15 12h.01"/></svg></span><span class="nav-label">OpenClaw</span></button>
       <div class="nav-section-label">Control</div>
-      <button class="nav-btn" data-tab="status"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 18V9m5 9V5m5 13v-7m5 7V3"/></svg></span><span>Status</span></button>
-      <button class="nav-btn" id="newChat"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span>New Chat</span></button>
+      <button class="nav-btn" data-tab="status" title="Status"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 18V9m5 9V5m5 13v-7m5 7V3"/></svg></span><span class="nav-label">Status</span></button>
+      <button class="nav-btn" id="newChat" title="New Chat"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span class="nav-label">New Chat</span></button>
     </nav>
     <div class="sidebar-footer">
-      <div class="system-card">System<br>Gateway Status: <strong>Running</strong><br>Router: <strong>Auto</strong></div>
-      <div class="footer-row"><span>◉</span><span>AUTO AGENT</span><span class="spacer"></span><button onclick="location='/logout'" title="Logout">Logout</button></div>
-      <div class="footer-row"><span>v0.6 UI</span><span class="spacer"></span><span>LOCAL + EDGE AI</span></div>
+      <div class="system-card">System<br>Gateway: <strong>Running</strong><br>Router: <strong>Auto</strong></div>
+      <div class="footer-row"><span>◉</span><span class="footer-text">AUTO AGENT</span><span class="spacer"></span><button onclick="location='/logout'" title="Logout"><span class="logout-text">Logout</span> ↗</button></div>
+      <div class="footer-row"><span class="footer-text">v0.6.1 UI</span><span class="spacer"></span><span class="footer-text">EDGE AI</span></div>
     </div>
   </aside>
+
   <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
+
   <section class="main">
-    <div class="topbar">
-      <button class="mobile-menu" id="openMenu" aria-label="Open menu">☰</button>
-      <div><div class="top-title" id="topTitle">Unified Chat</div><div class="top-sub" id="topSub">Hermes + OpenClaw intelligent router</div></div>
-      <div class="top-spacer"></div>
-      <div class="connection-pill"><span class="dot"></span><span class="label">Control plane online</span></div>
-    </div>
-    <main class="content">
+    <button class="mobile-menu" id="mobileMenu" aria-label="Open menu" title="Open menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div class="content">
       <section id="chat" class="panel active">
         <div class="chat-panel">
           <div id="messages" class="messages">
             <div class="conversation" id="conversation">
-              <div id="welcome" class="welcome">
+              <div class="welcome" id="welcome">
                 <div class="welcome-inner">
-                  <div class="welcome-mark"><svg viewBox="0 0 24 24"><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/><circle cx="12" cy="12" r="4"/></svg></div>
+                  <div class="welcome-mark"><svg viewBox="0 0 24 24"><path d="M7 17 17 7M8 7h9v9"/></svg></div>
                   <h1>What can I help you build?</h1>
-                  <p>One workspace for technical operations, network and security analysis, automation, Hermes and OpenClaw.</p>
-                  <div class="welcome-chips"><span class="chip">@hermes technical work</span><span class="chip">@openclaw automation</span><span class="chip">Auto routing</span></div>
+                  <p>One workspace for Hermes and OpenClaw. Use Auto routing, or choose an agent before you send.</p>
+                  <div class="welcome-chips"><span class="chip">Network diagnostics</span><span class="chip">Code & automation</span><span class="chip">Operations</span></div>
                 </div>
               </div>
             </div>
@@ -110,74 +108,120 @@ button{color:inherit}
             <div class="composer">
               <textarea id="prompt" rows="1" placeholder="Message Auto Agent…" autofocus></textarea>
               <div class="composer-bottom">
-                <div class="mode-wrap"><select id="mode" class="mode-select" aria-label="Agent routing"><option value="auto">Auto</option><option value="hermes">Hermes</option><option value="openclaw">OpenClaw</option></select></div>
+                <div class="mode-wrap"><select id="mode" class="mode-select"><option value="auto">Auto</option><option value="hermes">Hermes</option><option value="openclaw">OpenClaw</option></select></div>
                 <span class="hint">Enter to send · Shift+Enter for new line</span>
-                <div class="composer-spacer"></div>
-                <button id="send" class="send-btn" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5m0 0-6 6m6-6 6 6"/></svg></button>
+                <span class="composer-spacer"></span>
+                <button id="send" class="send-btn" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
               </div>
             </div>
             <div class="composer-note">Auto Agent can make mistakes. Verify important actions before execution.</div>
           </div>
         </div>
       </section>
-      <section id="status" class="panel status-panel"><div class="status-card"><div class="status-head"><h2>System status</h2><div class="spacer"></div><button class="secondary-btn" onclick="loadStatus()">Refresh</button></div><pre id="statusText">Loading...</pre></div></section>
-    </main>
+
+      <section id="status" class="panel status-panel">
+        <div class="status-card">
+          <div class="status-head"><h2>System Status</h2><span class="spacer"></span><button class="secondary-btn" onclick="loadStatus()">Refresh</button></div>
+          <pre id="statusText">Loading…</pre>
+        </div>
+      </section>
+    </div>
   </section>
 </div>
 <script>
-const host=location.hostname;
-const publicCenter='__CENTER_PUBLIC_HOST__';
-const isPublic=publicCenter&&host===publicCenter;
-const hermesUrl=isPublic?'/sso/hermes':`http://${host}:__HERMES_PORT__/`;
-const openclawUrl=isPublic?'/sso/openclaw':`http://${host}:__OPENCLAW_PORT__/`;
 const shell=document.getElementById('appShell');
+const sidebarToggle=document.getElementById('sidebarToggle');
+const mobileMenu=document.getElementById('mobileMenu');
+const sidebarBackdrop=document.getElementById('sidebarBackdrop');
 const promptEl=document.getElementById('prompt');
 const sendBtn=document.getElementById('send');
+const modeEl=document.getElementById('mode');
 const conversation=document.getElementById('conversation');
+const welcome=document.getElementById('welcome');
+const publicCenter='__CENTER_PUBLIC_HOST__';
+const isPublic=publicCenter&&location.hostname===publicCenter;
+const hermesUrl=isPublic?'/sso/hermes':`http://${location.hostname}:__HERMES_PORT__/`;
+const openclawUrl=isPublic?'/sso/openclaw':`http://${location.hostname}:__OPENCLAW_PORT__/`;
 let conv=(crypto.randomUUID?crypto.randomUUID():String(Date.now()));
-function setMenu(open){shell.classList.toggle('menu-open',open)}
-document.getElementById('openMenu').onclick=()=>setMenu(true);
-document.getElementById('closeMenu').onclick=()=>setMenu(false);
-document.getElementById('sidebarBackdrop').onclick=()=>setMenu(false);
-function tab(name){
-  setMenu(false);
+
+function desktop(){return window.matchMedia('(min-width:901px)').matches}
+function syncSidebar(){
+  if(desktop()){
+    shell.classList.remove('menu-open');
+    const collapsed=localStorage.getItem('auto_agent_sidebar_collapsed')==='1';
+    shell.classList.toggle('sidebar-collapsed',collapsed);
+    sidebarToggle.setAttribute('aria-label',collapsed?'Expand sidebar':'Collapse sidebar');
+  }else{
+    shell.classList.remove('sidebar-collapsed');
+  }
+}
+function toggleSidebar(){
+  if(desktop()){
+    const next=!shell.classList.contains('sidebar-collapsed');
+    shell.classList.toggle('sidebar-collapsed',next);
+    localStorage.setItem('auto_agent_sidebar_collapsed',next?'1':'0');
+    sidebarToggle.setAttribute('aria-label',next?'Expand sidebar':'Collapse sidebar');
+  }else{
+    shell.classList.toggle('menu-open');
+  }
+}
+sidebarToggle.onclick=toggleSidebar;
+mobileMenu.onclick=()=>shell.classList.add('menu-open');
+sidebarBackdrop.onclick=()=>shell.classList.remove('menu-open');
+window.addEventListener('resize',syncSidebar);
+syncSidebar();
+
+function activate(name){
   if(name==='hermes'){location.href=hermesUrl;return}
   if(name==='openclaw'){location.href=openclawUrl;return}
   document.querySelectorAll('.nav-btn[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
   document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===name));
-  document.getElementById('topTitle').textContent=name==='status'?'System Status':'Unified Chat';
-  document.getElementById('topSub').textContent=name==='status'?'Runtime, gateway and public endpoint health':'Hermes + OpenClaw intelligent router';
+  if(!desktop())shell.classList.remove('menu-open');
   if(name==='status')loadStatus();
+  if(name==='chat')setTimeout(()=>promptEl.focus(),0);
 }
-document.querySelectorAll('.nav-btn[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
-function removeWelcome(){const w=document.getElementById('welcome');if(w)w.remove()}
-function add(cls,meta,text){
-  removeWelcome();
+document.querySelectorAll('.nav-btn[data-tab]').forEach(b=>b.onclick=()=>activate(b.dataset.tab));
+
+document.getElementById('newChat').onclick=()=>{
+  conv=(crypto.randomUUID?crypto.randomUUID():String(Date.now()));
+  conversation.querySelectorAll('.msg-row').forEach(n=>n.remove());
+  welcome.style.display='grid';
+  modeEl.value='auto';
+  activate('chat');
+};
+
+function autoGrow(){promptEl.style.height='auto';promptEl.style.height=Math.min(promptEl.scrollHeight,220)+'px'}
+promptEl.addEventListener('input',autoGrow);
+promptEl.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
+
+function add(kind,meta,text){
+  welcome.style.display='none';
   const row=document.createElement('div');
-  row.className='msg-row '+cls;
-  const avatar=document.createElement('div');avatar.className='avatar';avatar.textContent=cls==='user'?'YOU':(meta||'AI').slice(0,3).toUpperCase();
+  row.className='msg-row '+kind;
+  if(kind!=='user'){
+    const av=document.createElement('div');av.className='avatar';av.textContent=kind==='error'?'!':'AI';row.appendChild(av);
+  }
   const body=document.createElement('div');body.className='msg-body';
-  const m=document.createElement('div');m.className='meta';m.textContent=meta;
-  const t=document.createElement('div');t.className='msg-text';t.textContent=text;
-  body.append(m,t);
-  if(cls==='user'){row.append(body,avatar)}else{row.append(avatar,body)}
-  conversation.append(row);
-  row.scrollIntoView({block:'end',behavior:'smooth'});
+  if(kind!=='user'){const m=document.createElement('div');m.className='meta';m.textContent=meta;body.appendChild(m)}
+  const t=document.createElement('div');t.className='msg-text';t.textContent=text;body.appendChild(t);row.appendChild(body);conversation.appendChild(row);row.scrollIntoView({behavior:'smooth',block:'end'});
 }
-function autosize(){promptEl.style.height='auto';promptEl.style.height=Math.min(promptEl.scrollHeight,220)+'px'}
-promptEl.addEventListener('input',autosize);
-async function jsonResponse(r){const text=await r.text();const ct=(r.headers.get('content-type')||'').toLowerCase();if(!ct.includes('application/json')){const preview=(text||'').replace(/\s+/g,' ').trim().slice(0,180);throw new Error(`HTTP ${r.status} ${r.statusText}: expected JSON, received ${ct||'unknown content-type'}${preview?` - ${preview}`:''}`);}let d;try{d=JSON.parse(text||'{}');}catch(e){throw new Error(`HTTP ${r.status}: malformed JSON response`);}if(!r.ok)throw new Error(d.error||`HTTP ${r.status} ${r.statusText}`);return d;}
+async function jsonResponse(r){
+  const text=await r.text();
+  const ct=(r.headers.get('content-type')||'').toLowerCase();
+  if(!ct.includes('application/json')){const preview=(text||'').replace(/\s+/g,' ').trim().slice(0,180);throw new Error(`HTTP ${r.status} ${r.statusText}: expected JSON, received ${ct||'unknown content-type'}${preview?` - ${preview}`:''}`)}
+  let d;try{d=JSON.parse(text||'{}')}catch(e){throw new Error(`HTTP ${r.status}: malformed JSON response`)}
+  if(!r.ok)throw new Error(d.error||`HTTP ${r.status} ${r.statusText}`);return d;
+}
 async function send(){
   const message=promptEl.value.trim();if(!message)return;
-  promptEl.value='';autosize();add('user','You',message);sendBtn.disabled=true;
-  try{const r=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message,mode:document.getElementById('mode').value,conversation_id:conv})});const d=await jsonResponse(r);add('agent',d.agent,d.answer);document.getElementById('mode').value=d.agent;}
-  catch(e){add('error','Error',String(e));}
-  finally{sendBtn.disabled=false;promptEl.focus();}
+  promptEl.value='';autoGrow();add('user','You',message);sendBtn.disabled=true;
+  try{
+    const r=await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({message,mode:modeEl.value,conversation_id:conv})});
+    const d=await jsonResponse(r);add('agent',d.agent||'Auto Agent',d.answer||'');modeEl.value=d.agent||modeEl.value;
+  }catch(e){add('error','Error',String(e))}finally{sendBtn.disabled=false;promptEl.focus()}
 }
 sendBtn.onclick=send;
-promptEl.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}});
-document.getElementById('newChat').onclick=()=>{conv=(crypto.randomUUID?crypto.randomUUID():String(Date.now()));conversation.innerHTML='<div id="welcome" class="welcome"><div class="welcome-inner"><div class="welcome-mark">✦</div><h1>What can I help you build?</h1><p>Start a new task with Auto, Hermes, or OpenClaw.</p><div class="welcome-chips"><span class="chip">@hermes technical work</span><span class="chip">@openclaw automation</span><span class="chip">Auto routing</span></div></div></div>';document.getElementById('mode').value='auto';tab('chat');promptEl.focus();};
-async function loadStatus(){try{const r=await fetch('/api/status');const d=await jsonResponse(r);document.getElementById('statusText').textContent=JSON.stringify(d,null,2);}catch(e){document.getElementById('statusText').textContent=String(e)}}
+async function loadStatus(){try{const r=await fetch('/api/status');const d=await jsonResponse(r);document.getElementById('statusText').textContent=JSON.stringify(d,null,2)}catch(e){document.getElementById('statusText').textContent=String(e)}}
 </script>
 </body>
 </html>

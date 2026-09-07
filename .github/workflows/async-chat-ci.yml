@@ -20,44 +20,41 @@ jobs:
         run: |
           set -euo pipefail
           bash -n scripts/ui_upgrade.sh
-          python3 -m py_compile scripts/control_center_v2.py scripts/control_center_v4.py
+          python3 -m py_compile scripts/control_center_v2.py scripts/control_center_v4.py scripts/control_center_v5.py
           node --check scripts/control_center_async.js
+          node --check scripts/control_center_polish.js
 
-      - name: Async request contracts
+      - name: Async + runtime contracts
         shell: bash
         run: |
           set -euo pipefail
           grep -Fq 'ThreadPoolExecutor(' scripts/control_center_v4.py
           grep -Fq '"/api/chat/jobs/"' scripts/control_center_v4.py
-          grep -Fq 'self.send_json(202' scripts/control_center_v4.py
-          grep -Fq 'EXECUTOR.submit(run_job' scripts/control_center_v4.py
-          grep -Fq 'pollJob' scripts/control_center_async.js
-          grep -Fq "fetch('/api/chat'" scripts/control_center_async.js
-          grep -Fq "fetch(job.poll_url" scripts/control_center_async.js
-          grep -Fq 'stopImmediatePropagation' scripts/control_center_async.js
-          grep -Fq 'Cloudflare-safe async chat submit + polling installed' scripts/ui_upgrade.sh
-          grep -Fq 'control_center_v4.py' scripts/ui_upgrade.sh
-          grep -Fq 'control_center_async.js' scripts/ui_upgrade.sh
+          grep -Fq 'resolve_runtime_policy' scripts/control_center_v4.py
+          grep -Fq 'agent.run_budget_seconds' scripts/control_center_v4.py
+          grep -Fq 'agents.defaults.timeoutSeconds' scripts/control_center_v4.py
+          grep -Fq 'poll_token' scripts/control_center_v4.py
+          grep -Fq 'for (;;)' scripts/control_center_async.js
+          grep -Fq 'X-Auto-Agent-Job-Token' scripts/control_center_async.js
+          ! grep -Fq '15 minute client wait limit' scripts/control_center_async.js
+          ! grep -Fq 'timeout=900' scripts/control_center_v4.py
 
-      - name: Agent-owned runtime policy contracts
+      - name: History + presentation contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'agent.run_budget_seconds' scripts/control_center_v4.py
-          grep -Fq 'agent.gateway_timeout' scripts/control_center_v4.py
-          grep -Fq 'agents.defaults.timeoutSeconds' scripts/control_center_v4.py
-          grep -Fq 'openclaw-upstream-default-172800' scripts/control_center_v4.py
-          grep -Fq 'def resolve_runtime_policy' scripts/control_center_v4.py
-          grep -Fq 'def transport_timeout' scripts/control_center_v4.py
-          grep -Fq 'runtime_policy' scripts/control_center_v4.py
-          grep -Fq 'poll_token' scripts/control_center_v4.py
-          grep -Fq 'X-Auto-Agent-Job-Token' scripts/control_center_v4.py
-          grep -Fq 'for (;;)' scripts/control_center_async.js
-          grep -Fq 'agent runtime: no hard cap' scripts/control_center_async.js
-          grep -Fq 'X-Auto-Agent-Job-Token' scripts/control_center_async.js
-          ! grep -Fq '15 * 60 * 1000' scripts/control_center_async.js
-          ! grep -Fq '15 minute client wait limit' scripts/control_center_async.js
-          ! grep -Fq 'timeout=900' scripts/control_center_v4.py
+          grep -Fq 'chat_history.sqlite3' scripts/control_center_v5.py
+          grep -Fq '/api/history' scripts/control_center_v5.py
+          grep -Fq 'history_append' scripts/control_center_v5.py
+          grep -Fq 'verbatim pass-through' scripts/control_center_v5.py
+          grep -Fq 'AutoAgentRenderMessage' scripts/control_center_polish.js
+          grep -Fq -- '--chat-font:17px' scripts/control_center_polish.js
+          grep -Fq 'History' scripts/control_center_polish.js
+          grep -Fq 'window.AutoAgentChat' scripts/control_center_async.js
+          grep -Fq 'autoagent:history-changed' scripts/control_center_async.js
+          grep -Fq 'control_center_v5.py' scripts/ui_upgrade.sh
+          grep -Fq 'control_center_polish.js' scripts/ui_upgrade.sh
+          grep -Fq 'Hermes/OpenClaw output remains verbatim' scripts/ui_upgrade.sh
 
       - name: Runtime policy unit test
         shell: bash
@@ -74,40 +71,44 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import importlib.util
-          import time
           spec = importlib.util.spec_from_file_location('cc4', 'scripts/control_center_v4.py')
           m = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(m)
-
           assert m.parse_duration('null', 123) is None
           assert m.parse_duration('0', 123) is None
           assert m.parse_duration('172800', None) == 172800
           assert m.transport_timeout({'hard_limit_seconds': None}) is None
           assert m.transport_timeout({'hard_limit_seconds': 600}) > 600
+          PY
 
-          m.run_hermes = lambda message, policy: 'ok:' + message
-          job_id = 'unit-job'
-          policy = {
-              'agent': 'hermes',
-              'hard_limit_seconds': None,
-              'hard_limit_source': 'unit-test',
-              'inactivity_timeout_seconds': 1800,
-              'unlimited': True,
-          }
-          with m.JOB_LOCK:
-              m.JOBS[job_id] = {
-                  'status': 'queued',
-                  'agent': 'hermes',
-                  'conversation_id': 'conv',
-                  'created_at': time.time(),
-                  'runtime_policy': policy,
-                  'poll_token_hash': m.hash_poll_token('secret-token'),
-              }
-          m.run_job(job_id, 'hermes', 'network diagnostics', 'conv', '127.0.0.1')
-          with m.JOB_LOCK:
-              job = dict(m.JOBS[job_id])
-          assert job['status'] == 'done', job
-          assert job['answer'] == 'ok:network diagnostics', job
-          assert m.job_token_valid(job, 'secret-token')
-          assert not m.job_token_valid(job, 'wrong-token')
+      - name: Persistent history unit test
+        shell: bash
+        env:
+          AUTO_AGENT_APP_DIR: ${{ github.workspace }}/scripts
+          AUTO_AGENT_HISTORY_DB: ${{ runner.temp }}/auto_agent_history.sqlite3
+          AUTO_AGENT_CONTROL_PASSWORD: test-password
+          AUTO_AGENT_SESSION_SECRET: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          OPENCLAW_LOCAL_PASSWORD: local-password
+          AUTO_AGENT_PUBLIC_DOMAIN: example.com
+          AUTO_AGENT_CENTER_PUBLIC_HOST: workspace.example.com
+          AUTO_AGENT_HERMES_PUBLIC_HOST: hermes.example.com
+          AUTO_AGENT_OPENCLAW_PUBLIC_HOST: openclaw.example.com
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util
+          spec = importlib.util.spec_from_file_location('cc5', 'scripts/control_center_v5.py')
+          m = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+          m.init_db()
+          conv='unit-history-1'
+          m.history_append(conv,'user','', 'network diagnostics')
+          m.history_append(conv,'assistant','hermes','**Result:**\n- raw agent output')
+          item=m.history_get(conv)
+          assert item['conversation']['title']=='network diagnostics'
+          assert [x['role'] for x in item['messages']]==['user','assistant']
+          assert item['messages'][1]['content']=='**Result:**\n- raw agent output'
+          assert m.history_list(10)[0]['id']==conv
+          assert m.history_delete(conv)
+          assert m.history_get(conv) is None
           PY

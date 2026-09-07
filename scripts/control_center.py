@@ -26,6 +26,9 @@ OPENCLAW_LOCAL_PASSWORD = os.environ.get("OPENCLAW_LOCAL_PASSWORD", "")
 PROXY_IDENTITY = os.environ.get("AUTO_AGENT_PROXY_IDENTITY", "auto-agent-admin")
 HERMES_PUBLIC_PORT = int(os.environ.get("AUTO_AGENT_HERMES_PUBLIC_PORT", "9119"))
 OPENCLAW_PUBLIC_PORT = int(os.environ.get("AUTO_AGENT_OPENCLAW_PUBLIC_PORT", "18789"))
+CENTER_PUBLIC_HOST = os.environ.get("AUTO_AGENT_CENTER_PUBLIC_HOST", "").strip().lower()
+HERMES_PUBLIC_HOST = os.environ.get("AUTO_AGENT_HERMES_PUBLIC_HOST", "").strip().lower()
+OPENCLAW_PUBLIC_HOST = os.environ.get("AUTO_AGENT_OPENCLAW_PUBLIC_HOST", "").strip().lower()
 
 if not PASSWORD or not SESSION_SECRET or not OPENCLAW_LOCAL_PASSWORD:
     raise SystemExit("Control Center credentials are incomplete")
@@ -180,7 +183,7 @@ input,button{box-sizing:border-box;width:100%;padding:12px;margin-top:10px;borde
 input{background:#0b1220;color:#fff}button{background:#2563eb;color:#fff;border:0;font-weight:700;cursor:pointer}
 .small{color:#94a3b8;font-size:13px}.err{color:#fca5a5}
 </style></head><body><form class="card" method="post" action="/login">
-<h2>Auto Agent Control Center</h2><div class="small">Hermes + OpenClaw · one LAN login</div>
+<h2>Auto Agent Control Center</h2><div class="small">Hermes + OpenClaw · secure unified login</div>
 __ERROR__<input name="username" placeholder="Username" autocomplete="username" required>
 <input name="password" type="password" placeholder="Password" autocomplete="current-password" required>
 <button type="submit">Login</button></form></body></html>"""
@@ -212,7 +215,12 @@ select,input{background:#111827;color:#fff;border:1px solid #334155;border-radiu
 <section id="status" class="panel status"><button onclick="loadStatus()">Refresh</button><pre id="statusText">Loading...</pre></section>
 </main>
 <script>
-const host=location.hostname;const hermesUrl=`http://${host}:__HERMES_PORT__/`;const openclawUrl=`http://${host}:__OPENCLAW_PORT__/`;let conv=(crypto.randomUUID?crypto.randomUUID():String(Date.now()));
+const host=location.hostname;
+const publicCenter='__CENTER_PUBLIC_HOST__';
+const isPublic=publicCenter&&host===publicCenter;
+const hermesUrl=isPublic?'https://__HERMES_PUBLIC_HOST__/':`http://${host}:__HERMES_PORT__/`;
+const openclawUrl=isPublic?'https://__OPENCLAW_PUBLIC_HOST__/':`http://${host}:__OPENCLAW_PORT__/`;
+let conv=(crypto.randomUUID?crypto.randomUUID():String(Date.now()));
 function tab(name){if(name==='hermes'){location.href=hermesUrl;return}if(name==='openclaw'){location.href=openclawUrl;return}document.querySelectorAll('header button[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===name));if(name==='status')loadStatus();}
 document.querySelectorAll('header button[data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
 function add(cls,meta,text){const d=document.createElement('div');d.className='msg '+cls;d.innerHTML=`<div class="meta">${meta}</div>`;d.append(document.createTextNode(text));document.getElementById('messages').append(d);d.scrollIntoView();}
@@ -224,7 +232,7 @@ async function loadStatus(){try{const r=await fetch('/api/status');const d=await
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "AutoAgentControl/0.4"
+    server_version = "AutoAgentControl/0.5"
 
     def log_message(self, fmt, *args):
         try:
@@ -247,6 +255,30 @@ class Handler(BaseHTTPRequestHandler):
         cookies = self.cookies()
         token = cookies["auto_agent_session"].value if "auto_agent_session" in cookies else ""
         return validate_session(token)
+
+    def cf_access_authed(self):
+        # This is deliberately not a generic trust of Cloudflare-looking headers.
+        # Nginx sets X-Auto-Agent-Public-Access=1 only for an exact public native
+        # hostname reached from the local cloudflared connector (127.0.0.1).
+        # Cloudflare Access must also provide its JWT assertion on that request.
+        boundary = self.headers.get("X-Auto-Agent-Public-Access", "") == "1"
+        assertion = self.headers.get("Cf-Access-Jwt-Assertion", "").strip()
+        return boundary and bool(assertion)
+
+    def request_is_https(self):
+        return self.headers.get("X-Forwarded-Proto", "").split(",", 1)[0].strip().lower() == "https"
+
+    def session_cookie(self, value: str, max_age: int):
+        parts = [
+            f"auto_agent_session={value}",
+            "Path=/",
+            "HttpOnly",
+            "SameSite=Lax",
+            f"Max-Age={max_age}",
+        ]
+        if self.request_is_https():
+            parts.append("Secure")
+        return "; ".join(parts)
 
     def security_headers(self):
         self.send_header("Cache-Control", "no-store")
@@ -306,13 +338,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/logout":
             self.redirect(
                 "/login",
-                [("Set-Cookie", "auto_agent_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0")],
+                [("Set-Cookie", self.session_cookie("", 0))],
             )
             return
         if path == "/auth/check":
-            if self.authed():
+            if self.authed() or self.cf_access_authed():
                 self.send_response(204)
-                self.send_header("X-Authenticated-User", USERNAME)
+                identity = USERNAME if self.authed() else "cloudflare-access"
+                self.send_header("X-Authenticated-User", identity)
                 self.end_headers()
             else:
                 self.send_response(401)
@@ -336,8 +369,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/":
             if not self.require_auth():
                 return
-            body = APP_HTML.replace("__HERMES_PORT__", str(HERMES_PUBLIC_PORT)).replace(
-                "__OPENCLAW_PORT__", str(OPENCLAW_PUBLIC_PORT)
+            body = (
+                APP_HTML
+                .replace("__HERMES_PORT__", str(HERMES_PUBLIC_PORT))
+                .replace("__OPENCLAW_PORT__", str(OPENCLAW_PUBLIC_PORT))
+                .replace("__CENTER_PUBLIC_HOST__", CENTER_PUBLIC_HOST)
+                .replace("__HERMES_PUBLIC_HOST__", HERMES_PUBLIC_HOST)
+                .replace("__OPENCLAW_PUBLIC_HOST__", OPENCLAW_PUBLIC_HOST)
             )
             self.send_html(200, body)
             return
@@ -361,7 +399,7 @@ class Handler(BaseHTTPRequestHandler):
             password = form.get("password", [""])[0]
             if hmac.compare_digest(user, USERNAME) and hmac.compare_digest(password, PASSWORD):
                 FAILED_LOGINS.pop(ip, None)
-                cookie = f"auto_agent_session={make_session()}; Path=/; HttpOnly; SameSite=Lax; Max-Age={SESSION_TTL}"
+                cookie = self.session_cookie(make_session(), SESSION_TTL)
                 self.redirect("/", [("Set-Cookie", cookie)])
             else:
                 FAILED_LOGINS.setdefault(ip, []).append(now)

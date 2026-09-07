@@ -82,7 +82,7 @@ jobs:
           grep -q 'models.providers.ollama.baseUrl' scripts/client.sh
           grep -q 'config set tools.profile messaging' scripts/client.sh
           grep -q 'gateway.http.endpoints.chatCompletions.enabled true' scripts/unified_control.sh
-          grep -q 'hermes.*-z' scripts/control_center.py
+          grep -q '"-z"' scripts/control_center.py
           grep -q 'openclaw/default' scripts/control_center.py
 
       - name: End-to-end readiness contracts

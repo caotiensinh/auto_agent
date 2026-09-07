@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-AUTO_AGENT_BOOTSTRAP_VERSION="0.5.4"
+AUTO_AGENT_BOOTSTRAP_VERSION="0.5.5"
 REPO_RAW="${AUTO_AGENT_REPO_RAW:-https://raw.githubusercontent.com/caotiensinh/auto_agent/main}"
 ROLE="${ROLE:-auto}"
+ROTATE_CONTROL_SECRETS="${ROTATE_CONTROL_SECRETS:-0}"
 
 log(){ printf '\033[1;34m[auto_agent]\033[0m %s\n' "$*"; }
 ok(){ printf '\033[1;32m[auto_agent:OK]\033[0m %s\n' "$*"; }
@@ -61,11 +62,6 @@ download_component(){
   chmod 0700 "$out"
 }
 
-# IMPORTANT: when install.sh itself is executed as `curl ... | bash`, stdin is the
-# source-code pipe. A child program that reads stdin can otherwise consume the
-# unread remainder of this bootstrap and make phase 2/3 disappear. Components
-# therefore receive the controlling terminal (or /dev/null when no tty exists),
-# never the bootstrap source stream.
 run_bash_component(){
   local file="$1"; shift
   if [[ -r /dev/tty ]]; then
@@ -131,5 +127,5 @@ run_bash_component "$UNIFIED_TMP"
 SSO_TMP="$(mktemp)"
 log "CLIENT PHASE 3/3 — OpenClaw single-login SSO finalization"
 download_component scripts/openclaw_sso.sh "$SSO_TMP" 'AUTO_AGENT_COMPONENT=openclaw-sso'
-run_bash_component "$SSO_TMP"
+run_bash_component "$SSO_TMP" ROTATE_CONTROL_SECRETS="$ROTATE_CONTROL_SECRETS"
 ok "CLIENT PHASE 3/3 completed"

@@ -232,8 +232,6 @@ source "$conf"
 [[ "${GITHUB_REPOSITORY:-}" == "$EXPECTED_REPOSITORY" ]] || \
   deny "repository '${GITHUB_REPOSITORY:-missing}' is not '${EXPECTED_REPOSITORY}'"
 
-# Explicitly reject common bot identities even if a future platform anomaly
-# presented an unexpected actor mapping.
 case "${GITHUB_ACTOR:-}" in
   dependabot\[bot\]|github-actions\[bot\]|renovate\[bot\])
     deny "bot actor is not permitted"
@@ -366,7 +364,6 @@ install_repo_runner() {
         (cd "$runner_dir" && sudo ./svc.sh uninstall >/dev/null 2>&1) || true
       fi
 
-      # Obtain a fresh removal token via the repository API.
       local remove_json remove_token
       remove_json="$(api POST "https://api.github.com/repos/${OWNER}/${repo}/actions/runners/remove-token")" || {
         err "Could not create removal token for ${repo}."
@@ -382,7 +379,6 @@ install_repo_runner() {
         )
       fi
 
-      # Preserve a local backup of diagnostic metadata only.
       if [[ -f "${runner_dir}/.runner" ]]; then
         cp -a "${runner_dir}/.runner" "${runner_dir}/.runner.previous.$(date +%Y%m%d%H%M%S)" || true
       fi
@@ -406,15 +402,16 @@ install_repo_runner() {
 
   sudo -u "$RUNNER_USER" tar xzf "$ARCHIVE" -C "$runner_dir"
 
-  for required in run.sh config.sh svc.sh; do
+  # The release archive contains run.sh/config.sh. svc.sh is created only
+  # after config.sh successfully registers the runner.
+  for required in run.sh config.sh; do
     if [[ ! -f "${runner_dir}/${required}" ]]; then
-      err "${repo}: runner install is incomplete; missing ${required}"
+      err "${repo}: runner archive extraction is incomplete; missing ${required}"
       ((FAILED+=1))
       return 1
     fi
   done
 
-  # Root-owned policy cannot be changed by the workflow service account.
   local policy_file="${SECURITY_DIR}/runners/${runner_name}.conf"
   {
     printf 'OWNER_ACTOR_ID=%q\n' "$OWNER_ACTOR_ID"
@@ -423,7 +420,6 @@ install_repo_runner() {
   sudo chown root:root "$policy_file"
   sudo chmod 0644 "$policy_file"
 
-  # Tell the GitHub runner to invoke the root-owned gate before every job.
   printf 'ACTIONS_RUNNER_HOOK_JOB_STARTED=%s\n' "$OWNER_GATE" | \
     sudo -u "$RUNNER_USER" tee "${runner_dir}/.env" >/dev/null
 
@@ -459,6 +455,14 @@ install_repo_runner() {
     ((FAILED+=1))
     return 1
   }
+
+  # GitHub creates svc.sh only after config.sh successfully registers the runner.
+  if [[ ! -x "${runner_dir}/svc.sh" ]]; then
+    err "${repo}: config.sh completed but svc.sh was not created."
+    err "${repo}: runner service configuration is incomplete."
+    ((FAILED+=1))
+    return 1
+  fi
 
   log "Installing systemd service..."
   (cd "$runner_dir" && sudo ./svc.sh install "$RUNNER_USER" >/dev/null)

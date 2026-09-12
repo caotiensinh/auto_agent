@@ -19,6 +19,15 @@ function Ok([string]$Message) {
     Write-Host "[ OK ] $Message" -ForegroundColor Green
 }
 
+function Test-PythonRuntime([string]$PythonExe, [string]$PythonArchPath) {
+    $encodings = Join-Path $PythonArchPath "Lib\encodings\__init__.py"
+    if (-not (Test-Path -LiteralPath $PythonExe)) { return $false }
+    if (-not (Test-Path -LiteralPath $encodings)) { return $false }
+
+    & $PythonExe -c "import encodings, venv, sys; print(sys.version); print(sys.prefix)" *> $null
+    return $LASTEXITCODE -eq 0
+}
+
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = New-Object Security.Principal.WindowsPrincipal($id)
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -107,6 +116,10 @@ try {
     }
 
     $versionDir = Join-Path (Join-Path $toolCache "Python") $version
+    $pythonArchPath = Join-Path $versionDir "x64"
+    $pythonExe = Join-Path $pythonArchPath "python.exe"
+    $completeMarker = Join-Path $versionDir "x64.complete"
+
     if (Test-Path -LiteralPath $versionDir) {
         Info "Removing incomplete existing cache entry: $versionDir"
         Remove-Item -LiteralPath $versionDir -Recurse -Force
@@ -127,20 +140,77 @@ try {
         Pop-Location
     }
 
-    $pythonExe = Join-Path $versionDir "x64\python.exe"
-    $completeMarker = Join-Path $versionDir "x64.complete"
-
     if (-not (Test-Path -LiteralPath $pythonExe)) {
         Fail "Python executable missing after setup: $pythonExe"
     }
+
+    if (-not (Test-PythonRuntime -PythonExe $pythonExe -PythonArchPath $pythonArchPath)) {
+        Info "Official setup produced an incomplete runtime; forcing installer TargetDir to the tool-cache path."
+
+        Remove-Item -LiteralPath $completeMarker -Force -ErrorAction SilentlyContinue
+
+        $installer = Get-ChildItem -LiteralPath $extractDir -File |
+            Where-Object { $_.Name -match '^python-.*\.exe$' } |
+            Select-Object -First 1
+
+        if ($null -eq $installer) {
+            Fail "Python installer executable was not found in the extracted artifact."
+        }
+
+        $repairInstaller = Join-Path $tempRoot $installer.Name
+        Copy-Item -LiteralPath $installer.FullName -Destination $repairInstaller -Force
+
+        $installArgs = @(
+            '/quiet',
+            'InstallAllUsers=1',
+            "TargetDir=$pythonArchPath",
+            'Include_core=1',
+            'Include_exe=1',
+            'Include_lib=1',
+            'Include_pip=1',
+            'Include_tools=1',
+            'Include_launcher=0',
+            'Include_tcltk=0',
+            'Include_test=0',
+            'AssociateFiles=0',
+            'Shortcuts=0',
+            'PrependPath=0'
+        )
+
+        $proc = Start-Process -FilePath $repairInstaller -ArgumentList $installArgs -Wait -PassThru -NoNewWindow
+        if ($proc.ExitCode -ne 0) {
+            Fail "Explicit TargetDir Python repair failed with exit code $($proc.ExitCode)."
+        }
+
+        if (-not (Test-PythonRuntime -PythonExe $pythonExe -PythonArchPath $pythonArchPath)) {
+            Fail "Python runtime is still incomplete after explicit TargetDir repair."
+        }
+
+        New-Item -ItemType File -Path $completeMarker -Force | Out-Null
+        Ok "Explicit TargetDir repair produced a self-contained Python runtime."
+    }
+
     if (-not (Test-Path -LiteralPath $completeMarker)) {
-        Fail "Tool-cache completion marker missing: $completeMarker"
+        New-Item -ItemType File -Path $completeMarker -Force | Out-Null
+    }
+
+    $smokeVenv = Join-Path $tempRoot "venv-smoke"
+    Remove-Item -LiteralPath $smokeVenv -Recurse -Force -ErrorAction SilentlyContinue
+    & $pythonExe -m venv $smokeVenv
+    if ($LASTEXITCODE -ne 0) {
+        Fail "Python runtime cannot create a venv."
+    }
+
+    $smokePython = Join-Path $smokeVenv "Scripts\python.exe"
+    & $smokePython -c "import encodings, sys; print(sys.version)"
+    if ($LASTEXITCODE -ne 0) {
+        Fail "Venv smoke import failed."
     }
 
     & icacls.exe $toolCache /grant:r "NT AUTHORITY\NETWORK SERVICE:(OI)(CI)RX" /T /C | Out-Null
 
     $reportedVersion = (& $pythonExe --version 2>&1 | Out-String).Trim()
-    Ok "Tool cache ready: $reportedVersion"
+    Ok "Tool cache ready and venv-capable: $reportedVersion"
     Write-Host "TOOL_CACHE=$toolCache"
     Write-Host "PYTHON_EXE=$pythonExe"
     Write-Host "COMPLETE_MARKER=$completeMarker"

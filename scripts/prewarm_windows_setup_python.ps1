@@ -56,23 +56,41 @@ try {
 
     New-Item -ItemType Directory -Force -Path $tempRoot, $extractDir, $toolCache | Out-Null
 
-    Info "Resolving latest stable Python $PythonMinor win32-x64 release..."
+    Info "Resolving latest stable Python $PythonMinor release that has a win32-x64 artifact..."
     $manifest = Invoke-RestMethod -Uri $manifestUrl -UseBasicParsing
-    $release = $manifest |
-        Where-Object { $_.stable -eq $true -and [string]$_.version -like "$PythonMinor.*" } |
-        Sort-Object { [version]$_.version } -Descending |
-        Select-Object -First 1
+    $candidates = @(
+        $manifest |
+            Where-Object { $_.stable -eq $true -and [string]$_.version -like "$PythonMinor.*" } |
+            Sort-Object { [version]$_.version } -Descending
+    )
 
-    if ($null -eq $release) {
+    if ($candidates.Count -eq 0) {
         Fail "No stable Python $PythonMinor release found in actions/python-versions manifest."
     }
 
-    $file = $release.files |
-        Where-Object { [string]$_.platform -eq "win32" -and [string]$_.arch -eq "x64" } |
-        Select-Object -First 1
+    $release = $null
+    $file = $null
 
-    if ($null -eq $file -or [string]::IsNullOrWhiteSpace([string]$file.download_url)) {
-        Fail "No win32-x64 artifact found for Python $($release.version)."
+    foreach ($candidate in $candidates) {
+        $candidateFile = $candidate.files |
+            Where-Object {
+                [string]$_.platform -eq "win32" -and
+                [string]$_.arch -eq "x64" -and
+                -not [string]::IsNullOrWhiteSpace([string]$_.download_url)
+            } |
+            Select-Object -First 1
+
+        if ($null -ne $candidateFile) {
+            $release = $candidate
+            $file = $candidateFile
+            break
+        }
+
+        Info "Skipping Python $($candidate.version): no win32-x64 artifact in manifest."
+    }
+
+    if ($null -eq $release -or $null -eq $file) {
+        Fail "No stable Python $PythonMinor release with a win32-x64 artifact was found."
     }
 
     $version = [string]$release.version

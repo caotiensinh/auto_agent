@@ -48,8 +48,10 @@ jobs:
           grep -Fq 'history_append' scripts/control_center_v5.py
           grep -Fq 'verbatim pass-through' scripts/control_center_v5.py
           grep -Fq 'AutoAgentRenderMessage' scripts/control_center_polish.js
-          grep -Fq "PRESENTATION_VERSION='0.6.3'" scripts/control_center_polish.js
-          grep -Fq -- '--chat-font:17px' scripts/control_center_polish.js
+          grep -Fq "PRESENTATION_VERSION='0.6.4'" scripts/control_center_polish.js
+          grep -Fq 'clamp(15.5px' scripts/control_center_polish.js
+          grep -Fq '68cqi' scripts/control_center_polish.js
+          grep -Fq 'container-type:inline-size' scripts/control_center_ui.html
           grep -Fq 'table-wrap' scripts/control_center_polish.js
           grep -Fq 'data-copy-code' scripts/control_center_polish.js
           grep -Fq 'callout' scripts/control_center_polish.js

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-AUTO_AGENT_COMPONENT=ui-v062
+AUTO_AGENT_COMPONENT=ui-v063
 
 REPO_RAW="${AUTO_AGENT_REPO_RAW:-https://raw.githubusercontent.com/caotiensinh/auto_agent/main}"
 APP_DIR="$HOME/.local/share/auto_agent"
@@ -66,8 +66,13 @@ grep -Fq 'chat_history.sqlite3' "$v5_tmp" || die "Persistent history database mi
 grep -Fq '/api/history' "$v5_tmp" || die "Persistent history API missing"
 grep -Fq 'verbatim pass-through' "$v5_tmp" || die "Raw agent pass-through policy missing"
 grep -Fq 'AutoAgentRenderMessage' "$polish_tmp" || die "Markdown presentation renderer missing"
+grep -Fq "PRESENTATION_VERSION='0.6.3'" "$polish_tmp" || die "v0.6.3 presentation layer missing"
+grep -Fq 'data-copy-code' "$polish_tmp" || die "Code copy interaction missing"
+grep -Fq 'table-wrap' "$polish_tmp" || die "Markdown table rendering missing"
+grep -Fq 'history-group' "$polish_tmp" || die "History grouping missing"
 grep -Fq 'History' "$polish_tmp" || die "History sidebar integration missing"
 grep -Fq 'pollJob' "$async_tmp" || die "Async chat polling client missing"
+grep -Fq "AutoAgentChatUXVersion='0.6.3'" "$async_tmp" || die "v0.6.3 chat interaction layer missing"
 grep -Fq "fetch('/api/chat'" "$async_tmp" || die "Async chat submit client missing"
 
 install -m 600 "$ui_tmp" "$UI_FILE"
@@ -86,7 +91,7 @@ lines = text.splitlines()
 out = []
 for line in lines:
     if line.startswith("Description=auto_agent Unified Control Center"):
-        out.append("Description=auto_agent Unified Control Center v0.6.2 history + markdown")
+        out.append("Description=auto_agent Unified Control Center v0.6.3 polished history + markdown")
     elif line.startswith("ExecStart=") and any(name in line for name in (
         "control_center_v2.py", "control_center_v3.py", "control_center_v4.py", "control_center_v5.py"
     )):
@@ -122,18 +127,18 @@ async_js="$(curl -fsS --max-time 4 http://127.0.0.1:18088/_auto_agent_async.js 2
 polish_js="$(curl -fsS --max-time 4 http://127.0.0.1:18088/_auto_agent_polish.js 2>/dev/null || true)"
 [[ "$polish_js" == *"AutoAgentRenderMessage"* ]] || die "Markdown/history browser asset verification failed"
 
-ok "Chat text increased to ChatGPT-like 17px with improved line spacing"
-ok "Agent Markdown is rendered safely for headings, lists, code and emphasis"
+ok "Chat typography refined to 17px with improved reading rhythm"
+ok "Agent Markdown presentation upgraded: hierarchy, tables, callouts, code copy and response copy"
 ok "Persistent server-side SQLite chat history installed"
-ok "Recent conversations are available from the sidebar"
+ok "Recent conversations are grouped in the sidebar by recency"
 ok "Hermes/OpenClaw output remains verbatim; no second AI polishing pass"
 ok "Cloudflare-safe async chat + agent-owned runtime policy preserved"
 ok "Existing SSO/auth/security boundaries preserved"
 printf '\n============================================================\n'
-printf 'AUTO_AGENT UI v0.6.2 READY\n'
-printf 'Typography : 17px readable chat body + formatted Markdown\n'
-printf 'History    : persistent SQLite, survives browser reload/restart\n'
-printf 'Output     : direct Hermes/OpenClaw pass-through; presentation-only formatting\n'
+printf 'AUTO_AGENT UI v0.6.3 READY\n'
+printf 'Typography : 17px readable body + stronger visual hierarchy\n'
+printf 'History    : persistent SQLite + grouped recent conversations\n'
+printf 'Output     : verbatim agent output; deterministic presentation-only polish\n'
 printf 'Runtime    : agent-owned; no arbitrary Auto Agent wall-clock cutoff\n'
 printf 'Security   : auth + SSO boundaries unchanged\n'
 printf '============================================================\n'

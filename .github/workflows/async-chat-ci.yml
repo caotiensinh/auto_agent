@@ -48,8 +48,14 @@ jobs:
           grep -Fq 'history_append' scripts/control_center_v5.py
           grep -Fq 'verbatim pass-through' scripts/control_center_v5.py
           grep -Fq 'AutoAgentRenderMessage' scripts/control_center_polish.js
+          grep -Fq "PRESENTATION_VERSION='0.6.3'" scripts/control_center_polish.js
           grep -Fq -- '--chat-font:17px' scripts/control_center_polish.js
+          grep -Fq 'table-wrap' scripts/control_center_polish.js
+          grep -Fq 'data-copy-code' scripts/control_center_polish.js
+          grep -Fq 'callout' scripts/control_center_polish.js
+          grep -Fq 'history-group' scripts/control_center_polish.js
           grep -Fq 'History' scripts/control_center_polish.js
+          grep -Fq "AutoAgentChatUXVersion='0.6.3'" scripts/control_center_async.js
           grep -Fq 'window.AutoAgentChat' scripts/control_center_async.js
           grep -Fq 'autoagent:history-changed' scripts/control_center_async.js
           grep -Fq 'control_center_v5.py' scripts/ui_upgrade.sh

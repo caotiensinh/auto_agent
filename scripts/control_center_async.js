@@ -33,7 +33,7 @@
   function createPending(agent) {
     welcome.style.display = 'none';
     const row = document.createElement('div');
-    row.className = 'msg-row agent';
+    row.className = 'msg-row agent pending';
     const avatar = document.createElement('div');
     avatar.className = 'avatar';
     avatar.textContent = 'AI';
@@ -44,7 +44,7 @@
     meta.textContent = `${agent || 'Auto Agent'} · working`;
     const text = document.createElement('div');
     text.className = 'msg-text';
-    text.textContent = 'Thinking…';
+    text.textContent = 'Working…';
     body.append(meta, text);
     row.append(avatar, body);
     conversation.appendChild(row);
@@ -88,8 +88,8 @@
   function policyLabel(policy) {
     if (!policy) return '';
     const hard = policy.hard_limit_seconds;
-    if (hard == null) return 'agent runtime: no hard cap';
-    return `agent runtime: ${formatDuration(hard)} max`;
+    if (hard == null) return 'No hard time limit';
+    return `Max runtime ${formatDuration(hard)}`;
   }
 
   async function sleep(ms) {
@@ -113,13 +113,15 @@
         transientFailures += 1;
         if (transientFailures >= 8) throw error;
         pending.meta.textContent = `${job.agent || 'Auto Agent'} · reconnecting`;
-        pending.text.textContent = `Temporary polling error. Retrying (${transientFailures}/8)…`;
+        pending.text.textContent = `Connection interrupted · retrying ${transientFailures}/8…`;
         delay = Math.min(10000, Math.max(1500, delay * 1.8));
         continue;
       }
 
       const policy = data.runtime_policy || job.runtime_policy || {};
       if (data.status === 'done') {
+        pending.row.classList.remove('pending');
+        pending.row.classList.add('completed');
         pending.meta.textContent = (data.agent || job.agent || 'Auto Agent').toUpperCase();
         // Verbatim agent content. Markdown rendering changes presentation only.
         renderMessage(pending.text, data.answer || '', 'assistant');
@@ -129,9 +131,10 @@
         return;
       }
       if (data.status === 'error') {
+        pending.row.classList.remove('pending');
         pending.row.className = 'msg-row error';
         pending.avatar.textContent = '!';
-        pending.meta.textContent = 'Error';
+        pending.meta.textContent = 'Request failed';
         renderMessage(pending.text, data.error || 'Agent execution failed', 'error');
         window.dispatchEvent(new CustomEvent('autoagent:history-changed'));
         return;
@@ -140,7 +143,7 @@
       const elapsed = Number(data.elapsed_ms || 0) / 1000;
       const policyText = policyLabel(policy);
       pending.meta.textContent = `${data.agent || job.agent || 'Auto Agent'} · working`;
-      pending.text.textContent = `Thinking… ${formatDuration(elapsed)}${policyText ? ` · ${policyText}` : ''}`;
+      pending.text.textContent = `Working… ${formatDuration(elapsed)}${policyText ? ` · ${policyText}` : ''}`;
       delay = Math.min(3000, Math.max(800, Number(data.retry_after_ms || 1200)));
     }
   }
@@ -171,9 +174,10 @@
       window.dispatchEvent(new CustomEvent('autoagent:history-changed'));
       await pollJob(job, pending);
     } catch (error) {
+      pending.row.classList.remove('pending');
       pending.row.className = 'msg-row error';
       pending.avatar.textContent = '!';
-      pending.meta.textContent = 'Error';
+      pending.meta.textContent = 'Request failed';
       renderMessage(pending.text, String(error), 'error');
     } finally {
       setBusy(false);
@@ -203,6 +207,8 @@
   }, true);
 
   if (newChat) newChat.onclick = clearForNewChat;
+
+  window.AutoAgentChatUXVersion='0.6.3';
 
   window.AutoAgentChat = {
     getConversationId: () => conversationId,

@@ -30,19 +30,19 @@ jobs:
           node --check scripts/control_center_async.js
           node --check scripts/control_center_polish.js
 
-      - name: Bootstrap v0.6.2 contracts
+      - name: Bootstrap v0.6.3 contracts
         shell: bash
         run: |
           set -euo pipefail
-          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.6.2"' install.sh
+          grep -q 'AUTO_AGENT_BOOTSTRAP_VERSION="0.6.3"' install.sh
           grep -q 'Cache-Control: no-cache' install.sh
           grep -q 'auto_agent_cache_bust=' install.sh
           grep -q 'run_bash_component' install.sh
           grep -Fq 'scripts/unified_control_v2.sh' install.sh
           grep -Fq 'scripts/ui_upgrade.sh' install.sh
           grep -Fq 'scripts/openclaw_sso_v2.sh' install.sh
-          grep -Fq 'AUTO_AGENT_COMPONENT=ui-v062' scripts/ui_upgrade.sh
-          grep -Fq "download_component scripts/ui_upgrade.sh \"\$UI_TMP\" 'AUTO_AGENT_COMPONENT=ui-v062'" install.sh
+          grep -Fq 'AUTO_AGENT_COMPONENT=ui-v063' scripts/ui_upgrade.sh
+          grep -Fq "download_component scripts/ui_upgrade.sh \"\$UI_TMP\" 'AUTO_AGENT_COMPONENT=ui-v063'" install.sh
 
       - name: Inventory-first and reuse contracts
         shell: bash
@@ -89,7 +89,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -Fq 'AUTO_AGENT_COMPONENT=ui-v062' scripts/ui_upgrade.sh
+          grep -Fq 'AUTO_AGENT_COMPONENT=ui-v063' scripts/ui_upgrade.sh
           grep -Fq 'control_center_v5.py' scripts/ui_upgrade.sh
           grep -Fq 'control_center_polish.js' scripts/ui_upgrade.sh
           grep -Fq 'Persistent server-side SQLite chat history installed' scripts/ui_upgrade.sh
@@ -105,6 +105,11 @@ jobs:
           grep -Fq 'verbatim pass-through' scripts/control_center_v5.py
           grep -Fq -- '--chat-font:17px' scripts/control_center_polish.js
           grep -Fq 'AutoAgentRenderMessage' scripts/control_center_polish.js
+          grep -Fq "PRESENTATION_VERSION='0.6.3'" scripts/control_center_polish.js
+          grep -Fq 'table-wrap' scripts/control_center_polish.js
+          grep -Fq 'data-copy-code' scripts/control_center_polish.js
+          grep -Fq 'history-group' scripts/control_center_polish.js
+          grep -Fq "AutoAgentChatUXVersion='0.6.3'" scripts/control_center_async.js
 
       - name: Agent-owned runtime contracts
         shell: bash

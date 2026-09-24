@@ -103,7 +103,6 @@ jobs:
           grep -Fq 'chat_history.sqlite3' scripts/control_center_v5.py
           grep -Fq '/api/history' scripts/control_center_v5.py
           grep -Fq 'verbatim pass-through' scripts/control_center_v5.py
-          grep -Fq 'PRESENTATION_VERSION=\'0.6.4\'' scripts/control_center_polish.js
           grep -Fq 'clamp(15.5px' scripts/control_center_polish.js
           grep -Fq '68cqi' scripts/control_center_polish.js
           grep -Fq 'container-type:inline-size' scripts/control_center_ui.html

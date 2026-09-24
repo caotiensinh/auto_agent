@@ -37,7 +37,7 @@ if "</body>" not in v4.backend.APP_HTML:
     raise SystemExit("Control Center UI has no </body> marker")
 v4.backend.APP_HTML = v4.backend.APP_HTML.replace(
     "</body>",
-    f'<script src="{POLISH_ASSET_PATH}?v=063-presentation"></script>\n</body>',
+    f'<script src="{POLISH_ASSET_PATH}?v=064-fluid-presentation"></script>\n</body>',
     1,
 )
 
@@ -221,7 +221,7 @@ def run_job_persistent(job_id, agent, routed_message, conversation_id, client_ip
 
 
 class Handler(v4.Handler):
-    server_version = "AutoAgentControl/0.6.3-history-presentation"
+    server_version = "AutoAgentControl/0.6.4-fluid-history-presentation"
 
     def send_polish_js(self):
         data = POLISH_JS_BYTES

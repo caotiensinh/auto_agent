@@ -37,7 +37,7 @@ if "</body>" not in v4.backend.APP_HTML:
     raise SystemExit("Control Center UI has no </body> marker")
 v4.backend.APP_HTML = v4.backend.APP_HTML.replace(
     "</body>",
-    f'<script src="{POLISH_ASSET_PATH}?v=062-history-markdown"></script>\n</body>',
+    f'<script src="{POLISH_ASSET_PATH}?v=063-presentation"></script>\n</body>',
     1,
 )
 
@@ -221,7 +221,7 @@ def run_job_persistent(job_id, agent, routed_message, conversation_id, client_ip
 
 
 class Handler(v4.Handler):
-    server_version = "AutoAgentControl/0.6.2-history-markdown"
+    server_version = "AutoAgentControl/0.6.3-history-presentation"
 
     def send_polish_js(self):
         data = POLISH_JS_BYTES
@@ -349,7 +349,7 @@ if __name__ == "__main__":
     hermes_policy = v4.resolve_runtime_policy("hermes", force=True)
     openclaw_policy = v4.resolve_runtime_policy("openclaw", force=True)
     print(f"[control-center-v5] history DB: {DB_PATH}")
-    print("[control-center-v5] agent output policy: verbatim pass-through; Markdown is presentation-only")
+    print("[control-center-v5] agent output policy: verbatim pass-through; deterministic presentation formatting only")
     print(
         "[control-center-v5] runtime policies: "
         f"Hermes hard={hermes_policy.get('hard_limit_seconds') or 'unlimited'}s; "

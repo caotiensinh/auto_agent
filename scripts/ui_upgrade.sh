@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-AUTO_AGENT_COMPONENT=ui-v063
+AUTO_AGENT_COMPONENT=ui-v064
 
 REPO_RAW="${AUTO_AGENT_REPO_RAW:-https://raw.githubusercontent.com/caotiensinh/auto_agent/main}"
 APP_DIR="$HOME/.local/share/auto_agent"
@@ -14,9 +14,9 @@ BASE_FILE="$APP_DIR/control_center_v2.py"
 UNIT="auto-agent-control-center.service"
 UNIT_FILE="$HOME/.config/systemd/user/$UNIT"
 
-log(){ printf '\033[1;34m[UI-V062]\033[0m %s\n' "$*"; }
-ok(){ printf '\033[1;32m[UI-V062:OK]\033[0m %s\n' "$*"; }
-die(){ printf '\033[1;31m[UI-V062:FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
+log(){ printf '\033[1;34m[UI-V064]\033[0m %s\n' "$*"; }
+ok(){ printf '\033[1;32m[UI-V064:OK]\033[0m %s\n' "$*"; }
+die(){ printf '\033[1;31m[UI-V064:FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
 
 [[ $EUID -ne 0 ]] || die "Run as normal Ubuntu user"
 [[ -f "$BASE_FILE" ]] || die "Control Center backend missing: $BASE_FILE"
@@ -66,11 +66,14 @@ grep -Fq 'chat_history.sqlite3' "$v5_tmp" || die "Persistent history database mi
 grep -Fq '/api/history' "$v5_tmp" || die "Persistent history API missing"
 grep -Fq 'verbatim pass-through' "$v5_tmp" || die "Raw agent pass-through policy missing"
 grep -Fq 'AutoAgentRenderMessage' "$polish_tmp" || die "Markdown presentation renderer missing"
-grep -Fq "PRESENTATION_VERSION='0.6.3'" "$polish_tmp" || die "v0.6.3 presentation layer missing"
+grep -Fq "PRESENTATION_VERSION='0.6.4'" "$polish_tmp" || die "v0.6.4 presentation layer missing"
 grep -Fq 'data-copy-code' "$polish_tmp" || die "Code copy interaction missing"
 grep -Fq 'table-wrap' "$polish_tmp" || die "Markdown table rendering missing"
 grep -Fq 'history-group' "$polish_tmp" || die "History grouping missing"
 grep -Fq 'History' "$polish_tmp" || die "History sidebar integration missing"
+grep -Fq '68cqi' "$polish_tmp" || die "Container-responsive content width missing"
+grep -Fq 'clamp(15.5px' "$polish_tmp" || die "Fluid chat typography missing"
+grep -Fq 'container-type:inline-size' "$ui_tmp" || die "Workspace container query context missing"
 grep -Fq 'pollJob' "$async_tmp" || die "Async chat polling client missing"
 grep -Fq "AutoAgentChatUXVersion='0.6.3'" "$async_tmp" || die "v0.6.3 chat interaction layer missing"
 grep -Fq "fetch('/api/chat'" "$async_tmp" || die "Async chat submit client missing"
@@ -91,7 +94,7 @@ lines = text.splitlines()
 out = []
 for line in lines:
     if line.startswith("Description=auto_agent Unified Control Center"):
-        out.append("Description=auto_agent Unified Control Center v0.6.3 polished history + markdown")
+        out.append("Description=auto_agent Unified Control Center v0.6.4 fluid responsive history + markdown")
     elif line.startswith("ExecStart=") and any(name in line for name in (
         "control_center_v2.py", "control_center_v3.py", "control_center_v4.py", "control_center_v5.py"
     )):
@@ -127,17 +130,17 @@ async_js="$(curl -fsS --max-time 4 http://127.0.0.1:18088/_auto_agent_async.js 2
 polish_js="$(curl -fsS --max-time 4 http://127.0.0.1:18088/_auto_agent_polish.js 2>/dev/null || true)"
 [[ "$polish_js" == *"AutoAgentRenderMessage"* ]] || die "Markdown/history browser asset verification failed"
 
-ok "Chat typography refined to 17px with improved reading rhythm"
-ok "Agent Markdown presentation upgraded: hierarchy, tables, callouts, code copy and response copy"
+ok "Fluid typography installed: bounded clamp() scaling across phone, tablet, laptop and desktop"
+ok "Container-aware content width and spacing installed; sidebar open/collapse now reflows chat naturally"
 ok "Persistent server-side SQLite chat history installed"
 ok "Recent conversations are grouped in the sidebar by recency"
 ok "Hermes/OpenClaw output remains verbatim; no second AI polishing pass"
 ok "Cloudflare-safe async chat + agent-owned runtime policy preserved"
 ok "Existing SSO/auth/security boundaries preserved"
 printf '\n============================================================\n'
-printf 'AUTO_AGENT UI v0.6.3 READY\n'
-printf 'Typography : 17px readable body + stronger visual hierarchy\n'
-printf 'History    : persistent SQLite + grouped recent conversations\n'
+printf 'AUTO_AGENT UI v0.6.4 READY\n'
+printf 'Typography : fluid clamp() scale with min/max bounds\n'
+printf 'Layout     : container-aware width, spacing and responsive hierarchy\n'
 printf 'Output     : verbatim agent output; deterministic presentation-only polish\n'
 printf 'Runtime    : agent-owned; no arbitrary Auto Agent wall-clock cutoff\n'
 printf 'Security   : auth + SSO boundaries unchanged\n'

@@ -2,7 +2,7 @@
   const PRESENTATION_VERSION='0.6.3';
   const style=document.createElement('style');
   style.dataset.autoAgentPolish='v063';
-  style.textContent=\`
+  style.textContent=`
     :root{--chat-font:17px;--chat-line:1.78;--chat-width:860px;--chat-accent:#8fc7b8}
     .conversation{width:min(var(--chat-width),100%)}
     .msg-row{width:min(var(--chat-width),100%);margin-bottom:30px;animation:aa-message-in .22s cubic-bezier(.2,.8,.2,1);content-visibility:auto;contain-intrinsic-size:1px 120px}
@@ -41,7 +41,7 @@
     @keyframes aa-message-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}@keyframes aa-answer-ready{from{opacity:.55;transform:translateY(3px)}to{opacity:1;transform:none}}@keyframes aa-breathe{0%,100%{box-shadow:0 0 0 0 rgba(143,199,184,0)}50%{box-shadow:0 0 0 5px rgba(143,199,184,.08)}}
     @media(max-width:900px){:root{--chat-font:16px;--chat-line:1.72}.msg-row.user .msg-text{font-size:16px!important}.history-list{max-height:26vh}.msg-actions{opacity:1}}
     @media(prefers-reduced-motion:reduce){.msg-row,.msg-row.completed .msg-body,.msg-row.pending .avatar{animation:none!important}*{scroll-behavior:auto!important}}
-  \`;
+  `;
   document.head.appendChild(style);
 
   function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -49,36 +49,36 @@
   function inlineMd(text){
     let out=esc(text);
     const code=[];
-    out=out.replace(/\`([^\`]+)\`/g,(_,v)=>{const i=code.push(\`<code>\${v}</code>\`)-1;return \`@@CODE\${i}@@\`;});
-    out=out.replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g,(_,label,url)=>\`<a href="\${esc(safeUrl(url))}" target="_blank" rel="noopener noreferrer">\${label}</a>\`);
+    out=out.replace(/`([^`]+)`/g,(_,v)=>{const i=code.push(`<code>\${v}</code>`)-1;return `@@CODE\${i}@@`;});
+    out=out.replace(/\\[([^\\]]+)\\]\\((https?:\\/\\/[^\\s)]+)\\)/g,(_,label,url)=>`<a href="\${esc(safeUrl(url))}" target="_blank" rel="noopener noreferrer">\${label}</a>`);
     out=out.replace(/\\*\\*([^*]+)\\*\\*/g,'<strong>$1</strong>').replace(/__([^_]+)__/g,'<strong>$1</strong>').replace(/~~([^~]+)~~/g,'<del>$1</del>').replace(/\\*([^*\\n]+)\\*/g,'<em>$1</em>');
     return out.replace(/@@CODE(\\d+)@@/g,(_,i)=>code[Number(i)]||'');
   }
   function splitCells(line){let s=line.trim();if(s.startsWith('|'))s=s.slice(1);if(s.endsWith('|'))s=s.slice(0,-1);return s.split('|').map(x=>x.trim());}
   function tableSeparator(line){const cells=splitCells(line);return cells.length>0&&cells.every(c=>/^:?-{3,}:?$/.test(c));}
-  function codeBlock(code,lang){return \`<div class="code-block"><div class="code-head"><span>\${esc(lang||'code')}</span><span class="code-spacer"></span><button type="button" class="code-copy" data-copy-code>Copy</button></div><pre><code>\${esc(code)}</code></pre></div>\`;}
+  function codeBlock(code,lang){return `<div class="code-block"><div class="code-head"><span>\${esc(lang||'code')}</span><span class="code-spacer"></span><button type="button" class="code-copy" data-copy-code>Copy</button></div><pre><code>\${esc(code)}</code></pre></div>`;}
   function tableBlock(header,separator,rows){
     const heads=splitCells(header),aligns=splitCells(separator).map(c=>c.startsWith(':')&&c.endsWith(':')?'center':c.endsWith(':')?'right':'left');
-    return \`<div class="table-wrap"><table><thead><tr>\${heads.map((c,i)=>\`<th style="text-align:\${aligns[i]||'left'}">\${inlineMd(c)}</th>\`).join('')}</tr></thead><tbody>\${rows.map(r=>{const cells=splitCells(r);return \`<tr>\${heads.map((_,i)=>\`<td style="text-align:\${aligns[i]||'left'}">\${inlineMd(cells[i]||'')}</td>\`).join('')}</tr>\`;}).join('')}</tbody></table></div>\`;
+    return `<div class="table-wrap"><table><thead><tr>\${heads.map((c,i)=>`<th style="text-align:\${aligns[i]||'left'}">\${inlineMd(c)}</th>`).join('')}</tr></thead><tbody>\${rows.map(r=>{const cells=splitCells(r);return `<tr>\${heads.map((_,i)=>`<td style="text-align:\${aligns[i]||'left'}">\${inlineMd(cells[i]||'')}</td>`).join('')}</tr>`;}).join('')}</tbody></table></div>`;
   }
   function markdown(text){
     const lines=String(text??'').replace(/\\r\\n/g,'\\n').split('\\n'),html=[];let paragraph=[],list=null,inCode=false,lang='',code=[];
-    const flushP=()=>{if(paragraph.length){html.push(\`<p>\${inlineMd(paragraph.join('\\n')).replace(/\\n/g,'<br>')}</p>\`);paragraph=[];}};
-    const flushList=()=>{if(list){html.push(\`</\${list}>\`);list=null;}};
-    const openList=t=>{if(list!==t){flushList();html.push(\`<\${t}>\`);list=t;}};
+    const flushP=()=>{if(paragraph.length){html.push(`<p>\${inlineMd(paragraph.join('\\n')).replace(/\\n/g,'<br>')}</p>`);paragraph=[];}};
+    const flushList=()=>{if(list){html.push(`</\${list}>`);list=null;}};
+    const openList=t=>{if(list!==t){flushList();html.push(`<\${t}>`);list=t;}};
     for(let i=0;i<lines.length;i++){
-      const raw=lines[i],f=raw.match(/^\`\`\`\\s*([A-Za-z0-9_+.-]*)\\s*$/);
+      const raw=lines[i],f=raw.match(/^```\\s*([A-Za-z0-9_+.-]*)\\s*$/);
       if(f){if(!inCode){flushP();flushList();inCode=true;lang=f[1]||'';code=[];}else{html.push(codeBlock(code.join('\\n'),lang));inCode=false;lang='';code=[];}continue;}
       if(inCode){code.push(raw);continue;} if(!raw.trim()){flushP();flushList();continue;}
       if(i+1<lines.length&&raw.includes('|')&&tableSeparator(lines[i+1])){
         flushP();flushList();const sep=lines[i+1],rows=[];i+=2;while(i<lines.length&&lines[i].trim()&&lines[i].includes('|')){rows.push(lines[i]);i++;}i--;html.push(tableBlock(raw,sep,rows));continue;
       }
       let m;
-      if((m=raw.match(/^(#{1,4})\\s+(.+)$/))){flushP();flushList();const n=m[1].length;html.push(\`<h\${n}>\${inlineMd(m[2])}</h\${n}>\`);continue;}
+      if((m=raw.match(/^(#{1,4})\\s+(.+)$/))){flushP();flushList();const n=m[1].length;html.push(`<h\${n}>\${inlineMd(m[2])}</h\${n}>`);continue;}
       if(/^\\s*([-*_])(?:\\s*\\1){2,}\\s*$/.test(raw)){flushP();flushList();html.push('<hr>');continue;}
-      if((m=raw.match(/^\\s*[-*+]\\s+(.+)$/))){flushP();openList('ul');const task=m[1].match(/^\\[([ xX])\\]\\s+(.+)$/);if(task){const checked=/[xX]/.test(task[1]);html.push(\`<li style="list-style:none;margin-left:-1.45em"><span class="task-box \${checked?'checked':''}">\${checked?'✓':''}</span>\${inlineMd(task[2])}</li>\`);}else html.push(\`<li>\${inlineMd(m[1])}</li>\`);continue;}
-      if((m=raw.match(/^\\s*\\d+[.)]\\s+(.+)$/))){flushP();openList('ol');html.push(\`<li>\${inlineMd(m[1])}</li>\`);continue;}
-      if((m=raw.match(/^>\\s?(.*)$/))){flushP();flushList();html.push(\`<blockquote>\${inlineMd(m[1])}</blockquote>\`);continue;}
+      if((m=raw.match(/^\\s*[-*+]\\s+(.+)$/))){flushP();openList('ul');const task=m[1].match(/^\\[([ xX])\\]\\s+(.+)$/);if(task){const checked=/[xX]/.test(task[1]);html.push(`<li style="list-style:none;margin-left:-1.45em"><span class="task-box \${checked?'checked':''}">\${checked?'✓':''}</span>\${inlineMd(task[2])}</li>`);}else html.push(`<li>\${inlineMd(m[1])}</li>`);continue;}
+      if((m=raw.match(/^\\s*\\d+[.)]\\s+(.+)$/))){flushP();openList('ol');html.push(`<li>\${inlineMd(m[1])}</li>`);continue;}
+      if((m=raw.match(/^>\\s?(.*)$/))){flushP();flushList();html.push(`<blockquote>\${inlineMd(m[1])}</blockquote>`);continue;}
       paragraph.push(raw);
     }
     if(inCode)html.push(codeBlock(code.join('\\n'),lang));else{flushP();flushList();}
@@ -130,7 +130,7 @@
       for(const c of d.conversations||[]){
         const next=historyBucket(c.updated_at);
         if(next!==bucket){bucket=next;const g=document.createElement('div');g.className='history-group';g.textContent=bucket;listEl.appendChild(g);}
-        const btn=document.createElement('button');btn.className='history-item'+(c.id===activeConversation?' active':'');btn.type='button';btn.title=\`\${c.title||'New chat'} · \${formatHistoryTime(c.updated_at)}\`;
+        const btn=document.createElement('button');btn.className='history-item'+(c.id===activeConversation?' active':'');btn.type='button';btn.title=`\${c.title||'New chat'} · \${formatHistoryTime(c.updated_at)}`;
         const title=document.createElement('span');title.className='history-title';title.textContent=c.title||'New chat';
         const agent=document.createElement('span');agent.className='history-agent';const name=(c.last_agent||'').toLowerCase();agent.textContent=name==='openclaw'?'O':name==='hermes'?'H':'·';agent.title=c.last_agent||'';
         btn.append(title,agent);btn.onclick=()=>loadConversation(c.id);listEl.appendChild(btn);
